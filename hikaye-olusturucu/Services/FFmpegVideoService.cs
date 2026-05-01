@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -61,7 +61,7 @@ public class FFmpegVideoService : IVideoService
 
     public async Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent)
     {
-        if (imagePaths.Count == 0) throw new Exception("GÃ¶rsel bulunamadÄ±.");
+        if (imagePaths.Count == 0) throw new Exception("Görsel bulunamadı.");
 
         double totalAudioDuration = GetAudioDuration(audioPath);
         double fadeDuration = 1.0;
@@ -76,7 +76,7 @@ public class FFmpegVideoService : IVideoService
 
         for (int i = 0; i < imagePaths.Count; i++)
         {
-            // NoktayÄ± virgÃ¼l olmasÄ±nÄ± engellemek iÃ§in InvariantCulture kullanÄ±yoruz
+            // Noktayı virgül olmasını engellemek için InvariantCulture kullanıyoruz
             string durStr = durationPerImage.ToString(System.Globalization.CultureInfo.InvariantCulture);
             sbInputs.Append($"-loop 1 -t {durStr} -i \"{imagePaths[i]}\" ");
             sbFilters.Append($"[{i}:v]scale=1024:1024,trim=duration={durStr},format=yuv420p[v{i}]; ");
@@ -121,7 +121,7 @@ public class FFmpegVideoService : IVideoService
             if (process.ExitCode != 0)
             {
                 string error = await errorTask;
-                throw new Exception($"FFmpeg hatasÄ±: {error}\nKullanÄ±lan ArgÃ¼manlar: {arguments}");
+                throw new Exception($"FFmpeg hatası: {error}\nKullanılan Argümanlar: {arguments}");
             }
         }
 

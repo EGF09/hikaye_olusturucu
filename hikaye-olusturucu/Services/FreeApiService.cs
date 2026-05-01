@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,7 +21,7 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
 
     public async Task<string> GenerateStoryAsync(string prompt)
     {
-        string systemPrompt = "Sen yaratÄ±cÄ± bir hikaye yazarÄ±sÄ±n. Verilen konuya gÃ¶re kÄ±sa, etkileyici ve gÃ¶rsel olarak betimlenebilecek bir hikaye yaz. Maksimum 3 kÄ±sa paragraf olsun.";
+        string systemPrompt = "Sen yaratıcı bir hikaye yazarısın. Verilen konuya göre kısa, etkileyici ve görsel olarak betimlenebilecek bir hikaye yaz. Maksimum 3 kısa paragraf olsun.";
         string fullPrompt = $"{systemPrompt} Konu: {prompt}";
         
         string url = $"https://text.pollinations.ai/{Uri.EscapeDataString(fullPrompt)}?model=openai";
@@ -55,7 +55,7 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
         using (var synthesizer = new SpeechSynthesizer())
         {
             var voices = SpeechSynthesizer.AllVoices;
-            // Ä°lk olarak Tolga'yÄ± ara, yoksa TÃ¼rkÃ§e arayÃ¼zlÃ¼ bir ses seÃ§
+            // İlk olarak Tolga'yı ara, yoksa Türkçe arayüzlü bir ses seç
             var trVoice = voices.FirstOrDefault(v => v.DisplayName.Contains("Tolga")) ?? 
                           voices.FirstOrDefault(v => v.Language.StartsWith("tr", StringComparison.OrdinalIgnoreCase));
             
@@ -63,9 +63,6 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
             {
                 synthesizer.Voice = trVoice;
             }
-            
-            // KonuÅŸma hÄ±zÄ±nÄ± veya kalitesini istersen buradan ayarlayabilirsin
-            // synthesizer.Options.SpeakingRate = 1.0; 
 
             using (var stream = await synthesizer.SynthesizeTextToStreamAsync(text))
             {
