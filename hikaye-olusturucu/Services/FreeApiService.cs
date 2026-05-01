@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
-using System.Speech.Synthesis;
 using System.Threading.Tasks;
 using hikaye_olusturucu.Core.Interfaces;
+using Windows.Media.SpeechSynthesis;
 
 namespace hikaye_olusturucu.Services;
 
@@ -15,21 +16,17 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
     public FreeApiService()
     {
         _httpClient = new HttpClient();
-        // Uzun sÃ¼rebilecek resim Ã¼retimleri iÃ§in timeout sÃ¼resini artÄ±rÄ±yoruz
         _httpClient.Timeout = TimeSpan.FromMinutes(5); 
     }
 
     public async Task<string> GenerateStoryAsync(string prompt)
     {
-        // Pollinations.ai Text API (Ãœcretsiz, API Key gerektirmez)
         string systemPrompt = "Sen yaratÄ±cÄ± bir hikaye yazarÄ±sÄ±n. Verilen konuya gÃ¶re kÄ±sa, etkileyici ve gÃ¶rsel olarak betimlenebilecek bir hikaye yaz. Maksimum 3 kÄ±sa paragraf olsun.";
         string fullPrompt = $"{systemPrompt} Konu: {prompt}";
         
         string url = $"https://text.pollinations.ai/{Uri.EscapeDataString(fullPrompt)}?model=openai";
-        
         var response = await _httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
-        
         return await response.Content.ReadAsStringAsync();
     }
 
@@ -41,7 +38,6 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
         for (int i = 0; i < count; i++)
         {
             string prompt = $"{basePrompt} - Scene part {i + 1}. No text in the image.";
-            // seed ekleyerek her gÃ¶rselin farklÄ± varyasyonlarda olmasÄ±nÄ± saÄŸlÄ±yoruz
             string url = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(prompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}";
             
             var imageBytes = await _httpClient.GetByteArrayAsync(url);
@@ -52,47 +48,37 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
         return imagePaths;
     }
 
-    public Task<string> GenerateAudioAsync(string text)
+    public async Task<string> GenerateAudioAsync(string text)
     {
-        return Task.Run(() =>
+        string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"audio_{Guid.NewGuid()}.wav");
+        
+        using (var synthesizer = new SpeechSynthesizer())
         {
-            string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"audio_{Guid.NewGuid()}.wav");
+            var voices = SpeechSynthesizer.AllVoices;
+            // Ä°lk olarak Tolga'yÄ± ara, yoksa TÃ¼rkÃ§e arayÃ¼zlÃ¼ bir ses seÃ§
+            var trVoice = voices.FirstOrDefault(v => v.DisplayName.Contains("Tolga")) ?? 
+                          voices.FirstOrDefault(v => v.Language.StartsWith("tr", StringComparison.OrdinalIgnoreCase));
             
-            using (var synthesizer = new SpeechSynthesizer())
+            if (trVoice != null)
             {
-                bool isTurkishSet = false;
-                
-                // 1. Ã–ncelik: AdÄ±nda 'Tolga' geÃ§en sesi bul
-                foreach (var voice in synthesizer.GetInstalledVoices())
-                {
-                    if (voice.VoiceInfo.Name.IndexOf("Tolga", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        synthesizer.SelectVoice(voice.VoiceInfo.Name);
-                        isTurkishSet = true;
-                        break;
-                    }
-                }
-
-                // 2. Ã–ncelik: Tolga yoksa 'tr' veya 'tr-TR' ile baÅŸlayan herhangi bir TÃ¼rkÃ§e ses bul
-                if (!isTurkishSet)
-                {
-                    foreach (var voice in synthesizer.GetInstalledVoices())
-                    {
-                        if (voice.VoiceInfo.Culture.Name.StartsWith("tr", StringComparison.OrdinalIgnoreCase) || 
-                            voice.VoiceInfo.Culture.TwoLetterISOLanguageName.Equals("tr", StringComparison.OrdinalIgnoreCase))
-                        {
-                            synthesizer.SelectVoice(voice.VoiceInfo.Name);
-                            isTurkishSet = true;
-                            break;
-                        }
-                    }
-                }
-                
-                synthesizer.SetOutputToWaveFile(filePath);
-                synthesizer.Speak(text);
+                synthesizer.Voice = trVoice;
             }
             
-            return filePath;
-        });
+            // KonuÅŸma hÄ±zÄ±nÄ± veya kalitesini istersen buradan ayarlayabilirsin
+            // synthesizer.Options.SpeakingRate = 1.0; 
+
+            using (var stream = await synthesizer.SynthesizeTextToStreamAsync(text))
+            {
+                using (var fileStream = File.Create(filePath))
+                {
+                    using (var reader = stream.AsStreamForRead())
+                    {
+                        await reader.CopyToAsync(fileStream);
+                    }
+                }
+            }
+        }
+        
+        return filePath;
     }
 }

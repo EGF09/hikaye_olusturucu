@@ -18,48 +18,87 @@ public class FFmpegVideoService : IVideoService
         _ffmpegPath = ffmpegPath;
     }
 
+    private double GetAudioDuration(string filePath)
+    {
+        try
+        {
+            using var fs = File.OpenRead(filePath);
+            using var reader = new BinaryReader(fs);
+            reader.ReadBytes(12); // RIFF, size, WAVE
+            while (fs.Position < fs.Length)
+            {
+                var chunkId = new string(reader.ReadChars(4));
+                var chunkSize = reader.ReadInt32();
+                if (chunkId == "fmt ")
+                {
+                    reader.ReadInt16(); // format tag
+                    reader.ReadInt16(); // channels
+                    reader.ReadInt32(); // sample rate
+                    int byteRate = reader.ReadInt32(); // byte rate
+                    fs.Position += chunkSize - 12; // skip rest of fmt
+                    
+                    // Now find data chunk
+                    while (fs.Position < fs.Length)
+                    {
+                        chunkId = new string(reader.ReadChars(4));
+                        chunkSize = reader.ReadInt32();
+                        if (chunkId == "data")
+                        {
+                            return (double)chunkSize / byteRate;
+                        }
+                        fs.Position += chunkSize;
+                    }
+                }
+                else
+                {
+                    fs.Position += chunkSize;
+                }
+            }
+        }
+        catch { }
+        return 15.0; // Fallback
+    }
+
     public async Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent)
     {
         if (imagePaths.Count == 0) throw new Exception("GÃ¶rsel bulunamadÄ±.");
 
-        string outputPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"video_{Guid.NewGuid()}.mp4");
-        string subtitlePath = CreateSubtitleFile(storyContent);
-        
-        // AltyazÄ± dosyasÄ± FFmpeg filter syntax'Ä±na uygun formatlanmalÄ±
-        string srtPath = subtitlePath.Replace("\\", "/").Replace(":", "\\:");
+        double totalAudioDuration = GetAudioDuration(audioPath);
+        double fadeDuration = 1.0;
+        double durationPerImage = ((totalAudioDuration - fadeDuration) / imagePaths.Count) + fadeDuration;
 
-        int durationPerImage = 5; // Her gÃ¶rsel 5 saniye
-        int fadeDuration = 1;     // 1 saniyelik geÃ§iÅŸ efekti (fade/xfade)
+        string outputPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"video_{Guid.NewGuid()}.mp4");
+        string subtitlePath = CreateSubtitleFile(storyContent, totalAudioDuration);
+        string srtPath = subtitlePath.Replace("\\", "/").Replace(":", "\\:");
 
         var sbInputs = new StringBuilder();
         var sbFilters = new StringBuilder();
 
-        // Her gÃ¶rseli input olarak ekle
         for (int i = 0; i < imagePaths.Count; i++)
         {
-            sbInputs.Append($"-loop 1 -t {durationPerImage} -i \"{imagePaths[i]}\" ");
-            // format=yuv420p yaparak donanÄ±msal oynatÄ±cÄ±lara uyumluluÄŸu saÄŸlÄ±yoruz (Ã¶nceden yuva420p alfa kanallÄ±ydÄ±)
-            sbFilters.Append($"[{i}:v]scale=1024:1024,trim=duration={durationPerImage},format=yuv420p[v{i}]; ");
+            // NoktayÄ± virgÃ¼l olmasÄ±nÄ± engellemek iÃ§in InvariantCulture kullanÄ±yoruz
+            string durStr = durationPerImage.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            sbInputs.Append($"-loop 1 -t {durStr} -i \"{imagePaths[i]}\" ");
+            sbFilters.Append($"[{i}:v]scale=1024:1024,trim=duration={durStr},format=yuv420p[v{i}]; ");
         }
 
         string lastNode = "[v0]";
-        int currentOffset = durationPerImage - fadeDuration;
+        double currentOffset = durationPerImage - fadeDuration;
 
-        // GeÃ§iÅŸ efektleri (xfade) oluÅŸtur
         for (int i = 1; i < imagePaths.Count; i++)
         {
             string nextNode = $"[v{i}]";
             string outNode = $"[out{i}]";
-            sbFilters.Append($"{lastNode}{nextNode}xfade=transition=fade:duration={fadeDuration}:offset={currentOffset}{outNode}; ");
+            string offsetStr = currentOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            string fadeDurStr = fadeDuration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            
+            sbFilters.Append($"{lastNode}{nextNode}xfade=transition=fade:duration={fadeDurStr}:offset={offsetStr}{outNode}; ");
             lastNode = outNode;
             currentOffset += (durationPerImage - fadeDuration);
         }
 
-        // Subtitles filter'Ä±nÄ± en son node'a uygula
         sbFilters.Append($"{lastNode}subtitles='{srtPath}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000'[finalv]");
 
-        // FFmpeg argÃ¼manlarÄ±nÄ± birleÅŸtir. Sesi de input olarak ver (-i audio)
-        // -pix_fmt yuv420p eklenerek Ã§Ä±ktÄ± dosyasÄ±nÄ±n Windows Medya OynatÄ±cÄ±sÄ± ile tamamen uyumlu olmasÄ± zorlandÄ±.
         string arguments = $"-y {sbInputs} -i \"{audioPath}\" -filter_complex \"{sbFilters}\" -map \"[finalv]\" -map {imagePaths.Count}:a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \"{outputPath}\"";
 
         var processInfo = new ProcessStartInfo
@@ -89,25 +128,33 @@ public class FFmpegVideoService : IVideoService
         return outputPath;
     }
 
-    private string CreateSubtitleFile(string content)
+    private string CreateSubtitleFile(string content, double totalAudioDurationInSeconds)
     {
         string srtPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"subs_{Guid.NewGuid()}.srt");
         var words = content.Split(new[] { ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-        int wordsPerSubtitle = 8;
-        int index = 1;
+        int wordsPerSubtitle = 6;
         
         var srtBuilder = new StringBuilder();
+        double timePerWord = totalAudioDurationInSeconds / Math.Max(1, words.Length);
+
+        double currentTime = 0;
+        int index = 1;
 
         for (int i = 0; i < words.Length; i += wordsPerSubtitle)
         {
-            var chunk = string.Join(" ", words.Skip(i).Take(wordsPerSubtitle));
-            TimeSpan start = TimeSpan.FromSeconds((index - 1) * 3);
-            TimeSpan end = TimeSpan.FromSeconds(index * 3);
+            var chunkWords = words.Skip(i).Take(wordsPerSubtitle).ToArray();
+            var chunkStr = string.Join(" ", chunkWords);
+            double chunkDuration = chunkWords.Length * timePerWord;
+            
+            TimeSpan start = TimeSpan.FromSeconds(currentTime);
+            TimeSpan end = TimeSpan.FromSeconds(currentTime + chunkDuration);
 
             srtBuilder.AppendLine(index.ToString());
             srtBuilder.AppendLine($"{start:hh\\:mm\\:ss\\,fff} --> {end:hh\\:mm\\:ss\\,fff}");
-            srtBuilder.AppendLine(chunk);
+            srtBuilder.AppendLine(chunkStr);
             srtBuilder.AppendLine();
+            
+            currentTime += chunkDuration;
             index++;
         }
 
