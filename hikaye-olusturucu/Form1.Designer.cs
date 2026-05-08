@@ -1,4 +1,4 @@
-﻿namespace hikaye_olusturucu
+namespace hikaye_olusturucu
 {
     partial class Form1
     {
@@ -8,6 +8,8 @@
         private System.Windows.Forms.TextBox txtStoryContent;
         private System.Windows.Forms.FlowLayoutPanel flowLayoutPanelImages;
         private System.Windows.Forms.Button btnGenerateVideo;
+        private System.Windows.Forms.Button btnSpeak;
+        private System.Windows.Forms.Button btnStop;
         private System.Windows.Forms.TextBox txtLog;
         private System.Windows.Forms.Label lblPrompt;
         private System.Windows.Forms.TabControl tabControlMedia;
@@ -31,6 +33,8 @@
             this.txtStoryContent = new System.Windows.Forms.TextBox();
             this.flowLayoutPanelImages = new System.Windows.Forms.FlowLayoutPanel();
             this.btnGenerateVideo = new System.Windows.Forms.Button();
+            this.btnSpeak = new System.Windows.Forms.Button();
+            this.btnStop = new System.Windows.Forms.Button();
             this.txtLog = new System.Windows.Forms.TextBox();
             this.lblPrompt = new System.Windows.Forms.Label();
             this.tabControlMedia = new System.Windows.Forms.TabControl();
@@ -80,6 +84,26 @@
             this.txtStoryContent.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.txtStoryContent.Size = new System.Drawing.Size(380, 200);
             this.txtStoryContent.TabIndex = 2;
+            
+            this.btnSpeak.BackColor = System.Drawing.SystemColors.ControlLight;
+            this.btnSpeak.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnSpeak.Location = new System.Drawing.Point(325, 215);
+            this.btnSpeak.Name = "btnSpeak";
+            this.btnSpeak.Size = new System.Drawing.Size(25, 25);
+            this.btnSpeak.TabIndex = 7;
+            this.btnSpeak.Text = "🔊";
+            this.btnSpeak.UseVisualStyleBackColor = false;
+            this.btnSpeak.Click += new System.EventHandler(this.btnSpeak_Click);
+
+            this.btnStop.BackColor = System.Drawing.SystemColors.ControlLight;
+            this.btnStop.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnStop.Location = new System.Drawing.Point(352, 215);
+            this.btnStop.Name = "btnStop";
+            this.btnStop.Size = new System.Drawing.Size(25, 25);
+            this.btnStop.TabIndex = 8;
+            this.btnStop.Text = "⏹";
+            this.btnStop.UseVisualStyleBackColor = false;
+            this.btnStop.Click += new System.EventHandler(this.btnStop_Click);
             
             this.tabControlMedia.Controls.Add(this.tabPageImages);
             this.tabControlMedia.Controls.Add(this.tabPageVideo);
@@ -133,6 +157,8 @@
             this.txtLog.TabIndex = 5;
             
             this.ClientSize = new System.Drawing.Size(790, 430);
+            this.Controls.Add(this.btnStop);
+            this.Controls.Add(this.btnSpeak);
             this.Controls.Add(this.lblPrompt);
             this.Controls.Add(this.txtLog);
             this.Controls.Add(this.btnGenerateVideo);

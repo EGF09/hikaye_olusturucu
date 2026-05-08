@@ -16,6 +16,7 @@ public partial class Form1 : Form
     private readonly IDatabaseService _dbService;
 
     private Story _currentStory = new();
+    private System.Media.SoundPlayer _player = new();
 
     // Tam ekran durumu için önceki ayarları saklayacağımız değişkenler
     private FormWindowState _previousWindowState;
@@ -174,6 +175,50 @@ public partial class Form1 : Form
         finally
         {
             ToggleUI(true);
+        }
+    }
+
+    private async void btnSpeak_Click(object sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(txtStoryContent.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            btnSpeak.Enabled = false;
+            Log("Metin seslendiriliyor...");
+
+            // Eğer daha önce ses oluşturulmamışsa veya metin değişmişse (opsiyonel basit kontrol)
+            // burada doğrudan yeni bir ses dosyası üretip çalıyoruz.
+            string audioPath = await _ttsService.GenerateAudioAsync(txtStoryContent.Text);
+            
+            _player.SoundLocation = audioPath;
+            _player.Play();
+            
+            Log("Seslendirme başladı.");
+        }
+        catch (Exception ex)
+        {
+            Log("Seslendirme hatası: " + ex.Message);
+        }
+        finally
+        {
+            btnSpeak.Enabled = true;
+        }
+    }
+
+    private void btnStop_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            _player.Stop();
+            Log("Seslendirme durduruldu.");
+        }
+        catch (Exception ex)
+        {
+            Log("Durdurma hatası: " + ex.Message);
         }
     }
 

@@ -21,7 +21,7 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
 
     public async Task<string> GenerateStoryAsync(string prompt)
     {
-        string systemPrompt = "Sen yaratıcı bir hikaye yazarısın. Verilen konuya göre kısa, etkileyici ve görsel olarak betimlenebilecek bir hikaye yaz. Maksimum 3 kısa paragraf olsun.";
+        string systemPrompt = "Sen yaratıcı bir hikaye yazarısın. Sadece hikaye metnini döndür. Teknik açıklamalar, 'paragraf sınırı doldu' gibi notlar veya gereksiz bilgiler ekleme. Hikayeyi kısa (maksimum 3 paragraf), etkileyici ve görsel olarak betimlenebilecek şekilde yaz ve mutlaka bir sonuca bağlayarak bitir.";
         string fullPrompt = $"{systemPrompt} Konu: {prompt}";
         
         string url = $"https://text.pollinations.ai/{Uri.EscapeDataString(fullPrompt)}?model=openai";
