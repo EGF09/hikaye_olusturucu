@@ -6,6 +6,7 @@ namespace hikaye_olusturucu.Core.Models;
 public class Story
 {
     public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public List<string> ImagePaths { get; set; } = new();

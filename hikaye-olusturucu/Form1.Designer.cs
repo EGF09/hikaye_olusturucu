@@ -87,7 +87,7 @@ namespace hikaye_olusturucu
             
             this.btnSpeak.BackColor = System.Drawing.SystemColors.ControlLight;
             this.btnSpeak.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnSpeak.Location = new System.Drawing.Point(325, 215);
+            this.btnSpeak.Location = new System.Drawing.Point(315, 215);
             this.btnSpeak.Name = "btnSpeak";
             this.btnSpeak.Size = new System.Drawing.Size(25, 25);
             this.btnSpeak.TabIndex = 7;
@@ -97,7 +97,7 @@ namespace hikaye_olusturucu
 
             this.btnStop.BackColor = System.Drawing.SystemColors.ControlLight;
             this.btnStop.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnStop.Location = new System.Drawing.Point(352, 215);
+            this.btnStop.Location = new System.Drawing.Point(342, 215);
             this.btnStop.Name = "btnStop";
             this.btnStop.Size = new System.Drawing.Size(25, 25);
             this.btnStop.TabIndex = 8;

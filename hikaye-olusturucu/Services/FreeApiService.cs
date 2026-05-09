@@ -30,6 +30,16 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
         return await response.Content.ReadAsStringAsync();
     }
 
+    public async Task<string> GenerateTitleAsync(string storyContent)
+    {
+        string prompt = $"Aşağıdaki hikaye için çok kısa (maksimum 4 kelime), etkileyici bir başlık yaz. Sadece başlığı döndür, tırnak işareti veya nokta kullanma: {storyContent}";
+        string url = $"https://text.pollinations.ai/{Uri.EscapeDataString(prompt)}?model=openai";
+        var response = await _httpClient.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        string title = await response.Content.ReadAsStringAsync();
+        return title.Trim().Trim('"').Trim('.');
+    }
+
     public async Task<List<string>> GenerateImagesAsync(string storyContent, int count = 3)
     {
         var imagePaths = new List<string>();

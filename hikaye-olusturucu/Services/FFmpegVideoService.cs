@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -59,13 +59,15 @@ public class FFmpegVideoService : IVideoService
         return 15.0; // Fallback
     }
 
-    public async Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent)
+    public async Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent, string title)
     {
         if (imagePaths.Count == 0) throw new Exception("Görsel bulunamadı.");
 
         double totalAudioDuration = GetAudioDuration(audioPath);
-        double fadeDuration = 1.0;
-        double durationPerImage = ((totalAudioDuration - fadeDuration) / imagePaths.Count) + fadeDuration;
+        double durationPerImage = totalAudioDuration / imagePaths.Count;
+        int fps = 25;
+        // zoompan için tam kare sayısı
+        int framesPerImage = (int)Math.Round(durationPerImage * fps);
 
         string outputPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"video_{Guid.NewGuid()}.mp4");
         string subtitlePath = CreateSubtitleFile(storyContent, totalAudioDuration);
@@ -76,29 +78,27 @@ public class FFmpegVideoService : IVideoService
 
         for (int i = 0; i < imagePaths.Count; i++)
         {
-            // Noktayı virgül olmasını engellemek için InvariantCulture kullanıyoruz
-            string durStr = durationPerImage.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            sbInputs.Append($"-loop 1 -t {durStr} -i \"{imagePaths[i]}\" ");
-            sbFilters.Append($"[{i}:v]scale=1024:1024,trim=duration={durStr},format=yuv420p[v{i}]; ");
-        }
-
-        string lastNode = "[v0]";
-        double currentOffset = durationPerImage - fadeDuration;
-
-        for (int i = 1; i < imagePaths.Count; i++)
-        {
-            string nextNode = $"[v{i}]";
-            string outNode = $"[out{i}]";
-            string offsetStr = currentOffset.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            string fadeDurStr = fadeDuration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            // ÖNEMLİ: -loop 1 KULLANMIYORUZ. Her resmi tek bir kare olarak alıyoruz.
+            sbInputs.Append($"-i \"{imagePaths[i]}\" ");
             
-            sbFilters.Append($"{lastNode}{nextNode}xfade=transition=fade:duration={fadeDurStr}:offset={offsetStr}{outNode}; ");
-            lastNode = outNode;
-            currentOffset += (durationPerImage - fadeDuration);
+            // zoompan filtresi, tek bir kareyi d={framesPerImage} kadar çoğaltarak video oluşturur.
+            // s=1024x1024 çıkış boyutu, fps=25 ise kare hızıdır.
+            string zoomEff = (i % 2 == 0) ? "zoom+0.0006" : "1.1-0.0006*on";
+            
+            sbFilters.Append($"[{i}:v]scale=2048:2048,zoompan=z='{zoomEff}':d={framesPerImage}:s=1024x1024:fps={fps},format=yuv420p[v{i}]; ");
         }
 
-        sbFilters.Append($"{lastNode}subtitles='{srtPath}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000'[finalv]");
+        // Birleştirme
+        for (int i = 0; i < imagePaths.Count; i++)
+        {
+            sbFilters.Append($"[v{i}]");
+        }
+        sbFilters.Append($"concat=n={imagePaths.Count}:v=1:a=0[vmerged]; ");
 
+        // Altyazı ekleme
+        sbFilters.Append($"[vmerged]subtitles='{srtPath}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000'[finalv]");
+
+        // Ses dosyası en son girdi (index = imagePaths.Count)
         string arguments = $"-y {sbInputs} -i \"{audioPath}\" -filter_complex \"{sbFilters}\" -map \"[finalv]\" -map {imagePaths.Count}:a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \"{outputPath}\"";
 
         var processInfo = new ProcessStartInfo
@@ -111,18 +111,17 @@ public class FFmpegVideoService : IVideoService
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(processInfo);
-        if (process != null)
-        {
-            var errorTask = process.StandardError.ReadToEndAsync();
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            await Task.WhenAll(errorTask, outputTask, process.WaitForExitAsync());
+        using var process = new Process { StartInfo = processInfo };
+        StringBuilder errorLog = new StringBuilder();
+        process.ErrorDataReceived += (s, e) => { if (e.Data != null) errorLog.AppendLine(e.Data); };
 
-            if (process.ExitCode != 0)
-            {
-                string error = await errorTask;
-                throw new Exception($"FFmpeg hatası: {error}\nKullanılan Argümanlar: {arguments}");
-            }
+        process.Start();
+        process.BeginErrorReadLine();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            throw new Exception($"FFmpeg Hatası!\n\nDetay:\n{errorLog}\n\nKomut:\n{arguments}");
         }
 
         return outputPath;

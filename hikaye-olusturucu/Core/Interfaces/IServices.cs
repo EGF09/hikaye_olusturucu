@@ -7,6 +7,7 @@ namespace hikaye_olusturucu.Core.Interfaces;
 public interface ILLMService
 {
     Task<string> GenerateStoryAsync(string prompt);
+    Task<string> GenerateTitleAsync(string storyContent);
 }
 
 public interface IImageGenerationService
@@ -21,7 +22,7 @@ public interface ITtsService
 
 public interface IVideoService
 {
-    Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent);
+    Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent, string title);
 }
 
 public interface IDatabaseService
