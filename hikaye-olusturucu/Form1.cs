@@ -1,9 +1,17 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using hikaye_olusturucu.Core.Interfaces;
 using hikaye_olusturucu.Core.Models;
 using Microsoft.Web.WebView2.Core;
+using Windows.Media.SpeechSynthesis;
+using System.Drawing;
+using System.Windows.Forms;
 
 namespace hikaye_olusturucu;
 
@@ -18,10 +26,15 @@ public partial class Form1 : Form
     private Story _currentStory = new();
     private System.Media.SoundPlayer _player = new();
 
-    // Tam ekran durumu için önceki ayarları saklayacağımız değişkenler
     private FormWindowState _previousWindowState;
     private FormBorderStyle _previousBorderStyle;
     private Control _previousParent;
+
+    private readonly Color BackColorDark = Color.FromArgb(30, 30, 46);
+    private readonly Color SurfaceColor = Color.FromArgb(49, 50, 68);
+    private readonly Color TextColor = Color.FromArgb(205, 214, 244);
+    private readonly Color AccentColor = Color.FromArgb(137, 180, 250);
+    private readonly Color SecondaryAccentColor = Color.FromArgb(203, 166, 247);
 
     public Form1(ILLMService llmService, IImageGenerationService imageService, ITtsService ttsService, IVideoService videoService, IDatabaseService dbService)
     {
@@ -31,26 +44,66 @@ public partial class Form1 : Form
         _ttsService = ttsService;
         _videoService = videoService;
         _dbService = dbService;
+        ApplyTheme();
+    }
+
+    private void ApplyTheme()
+    {
+        this.BackColor = BackColorDark;
+        this.ForeColor = TextColor;
+        this.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+
+        lblPrompt.ForeColor = TextColor;
+
+        StyleTextBox(txtPrompt);
+        StyleTextBox(txtStoryContent);
+        StyleTextBox(txtLog);
+
+        StyleButton(btnGenerateStory, SecondaryAccentColor, Color.FromArgb(17, 17, 27));
+        StyleButton(btnGenerateVideo, SecondaryAccentColor, Color.FromArgb(17, 17, 27));
+        StyleButton(btnSpeak, SurfaceColor, TextColor);
+        StyleButton(btnStop, SurfaceColor, TextColor);
+
+        btnGenerateStory.Text = "Hikaye Oluştur";
+        btnGenerateVideo.Text = "Video Oluştur";
+
+        tabControlMedia.BackColor = BackColorDark;
+        tabPageImages.BackColor = BackColorDark;
+        tabPageVideo.BackColor = BackColorDark;
+        flowLayoutPanelImages.BackColor = BackColorDark;
+    }
+
+    private void StyleTextBox(TextBox tb)
+    {
+        tb.BackColor = SurfaceColor;
+        tb.ForeColor = TextColor;
+        tb.BorderStyle = BorderStyle.FixedSingle;
+        tb.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+    }
+
+    private void StyleButton(Button btn, Color backColor, Color foreColor)
+    {
+        btn.FlatStyle = FlatStyle.Flat;
+        btn.FlatAppearance.BorderSize = 0;
+        btn.BackColor = backColor;
+        btn.ForeColor = foreColor;
+        btn.Cursor = Cursors.Hand;
+        btn.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
     }
 
     private async void Form1_Load(object sender, EventArgs e)
     {
         Log("Sistem başlatılıyor...");
-        try 
+        try
         {
             await _dbService.InitializeDatabaseAsync();
             Log("Veritabanı hazır.");
-            
-            // WebView2 Başlatılıyor: Oynatıcı kontrollerini (Play, Pause vb.) Türkçe yapmak için dil ayarı veriyoruz
-            var environmentOptions = new CoreWebView2EnvironmentOptions() { Language = "tr-TR" };
-            var environment = await CoreWebView2Environment.CreateAsync(null, null, environmentOptions);
-            await webViewVideo.EnsureCoreWebView2Async(environment);
-            
-            // Yerel dosyaları güvenli bir şekilde okumak için sanal bir host tanımlıyoruz
-            // Böylece HTML içerisinden yerel videolara erişebileceğiz
-            webViewVideo.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", AppDomain.CurrentDomain.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
 
-            // Tam ekran yapıldığında tetiklenecek olan event
+            var environmentOptions = new CoreWebView2EnvironmentOptions() { Language = "tr-TR" };
+            var environment = await CoreWebView2Environment.CreateAsync(null, null, environmentOptions);        
+            await webViewVideo.EnsureCoreWebView2Async(environment);
+
+            webViewVideo.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", AppDomain.CurrentDomain.BaseDirectory, CoreWebView2HostResourceAccessKind.Allow);
             webViewVideo.CoreWebView2.ContainsFullScreenElementChanged += CoreWebView2_ContainsFullScreenElementChanged;
 
             Log("Dahili Video Oynatıcı (WebView2) hazır.");
@@ -65,22 +118,16 @@ public partial class Form1 : Form
     {
         if (webViewVideo.CoreWebView2.ContainsFullScreenElement)
         {
-            // Videoda tam ekran butonuna basıldığında
             _previousWindowState = this.WindowState;
             _previousBorderStyle = this.FormBorderStyle;
             _previousParent = webViewVideo.Parent;
-
-            // Formun kenarlıklarını kaldırıp tam ekrana geç
             this.FormBorderStyle = FormBorderStyle.None;
             this.WindowState = FormWindowState.Maximized;
-
-            // WebView2 kontrolünü TabControl'den çıkartıp doğrudan ekrana (Form'a) yasla
             webViewVideo.Parent = this;
             webViewVideo.BringToFront();
         }
         else
         {
-            // Tam ekrandan (ESC) çıkıldığında eski haline döndür
             webViewVideo.Parent = _previousParent;
             this.FormBorderStyle = _previousBorderStyle;
             this.WindowState = _previousWindowState;
@@ -98,35 +145,40 @@ public partial class Form1 : Form
         try
         {
             ToggleUI(false);
-            _currentStory = new Story { Prompt = txtPrompt.Text };
-            
+            _currentStory = new Story { Prompt = txtPrompt.Text.Trim() };
+
             Log("Hikaye LLM ile oluşturuluyor...");
-            _currentStory.Content = await _llmService.GenerateStoryAsync(txtPrompt.Text);
-            
+            _currentStory.Content = await _llmService.GenerateStoryAsync(_currentStory.Prompt);
+
+            if (string.IsNullOrEmpty(_currentStory.Content))
+                throw new Exception("LLM boş içerik döndürdü.");
+
             Log("Hikaye başlığı oluşturuluyor...");
             _currentStory.Title = await _llmService.GenerateTitleAsync(_currentStory.Content);
-            
-            // Başlığı (BAŞLIK: yazısı olmadan) ve içeriği ekrana yazdır
-            txtStoryContent.Text = $"{_currentStory.Title.ToUpper()}\r\n\r\n{_currentStory.Content}";
 
-            Log("DALL-E ile 3 adet görsel üretiliyor...");
-            _currentStory.ImagePaths = await _imageService.GenerateImagesAsync(_currentStory.Content, 3);
-            
+            txtStoryContent.Text = $"{(_currentStory.Title ?? "BÖLÜM").ToUpper()}\r\n\r\n{_currentStory.Content}";
+
+            Log("DALL-E ile görseller üretiliyor...");
+            _currentStory.ImagePaths = await _imageService.GenerateImagesAsync(_currentStory.Content, 3);       
+
             flowLayoutPanelImages.Controls.Clear();
             foreach (var path in _currentStory.ImagePaths)
             {
-                var pb = new PictureBox
+                if (File.Exists(path))
                 {
-                    Image = Image.FromFile(path),
-                    SizeMode = PictureBoxSizeMode.Zoom,
-                    Width = 330,
-                    Height = 330,
-                    Margin = new Padding(5)
-                };
-                flowLayoutPanelImages.Controls.Add(pb);
+                    var pb = new PictureBox
+                    {
+                        Image = Image.FromFile(path),
+                        SizeMode = PictureBoxSizeMode.Zoom,
+                        Width = 330,
+                        Height = 330,
+                        Margin = new Padding(5)
+                    };
+                    flowLayoutPanelImages.Controls.Add(pb);
+                }
             }
-            
-            tabControlMedia.SelectedTab = tabPageImages; // Görseller sekmesini aktif et
+
+            tabControlMedia.SelectedTab = tabPageImages;
 
             Log("TTS ile hikaye seslendiriliyor...");
             _currentStory.AudioPath = await _ttsService.GenerateAudioAsync(_currentStory.Content);
@@ -139,8 +191,9 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         {
-            Log($"Hata: {ex.Message}");
-            MessageBox.Show(ex.Message, "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Log($"HATA: {ex.Message}");
+            if (ex.InnerException != null) Log($"Detay: {ex.InnerException.Message}");
+            MessageBox.Show($"Bir hata oluştu: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
@@ -153,77 +206,63 @@ public partial class Form1 : Form
         try
         {
             ToggleUI(false);
-            Log("FFmpeg ile video işleniyor (Görseller, Geçiş efektleri, Ses, Altyazı, Başlık ve Parçacık efektleri)...");
-            
+            Log("FFmpeg ile video işleniyor...");
+
             _currentStory.VideoPath = await _videoService.CreateVideoAsync(
-                _currentStory.ImagePaths, 
-                _currentStory.AudioPath, 
+                _currentStory.ImagePaths,
+                _currentStory.AudioPath,
                 _currentStory.Content,
                 _currentStory.Title);
 
-            Log("Video başarıyla oluşturuldu! Yol: " + _currentStory.VideoPath);
-            await _dbService.SaveStoryAsync(_currentStory); 
-            
-            Log("Video hazırlandı. Başlatmak için oynatıcıdaki butona basın.");
-            tabControlMedia.SelectedTab = tabPageVideo; // Video sekmesini aktif et
-            
-            try 
-            {
-                // Videoyu WebView2 içerisinde bir HTML wrapper ile açıyoruz ki otomatik başlamasın ve bir buton olsun
-                string fileName = Path.GetFileName(_currentStory.VideoPath);
-                string videoUrl = $"https://app.local/{fileName}";
+            Log("Video oluşturuldu: " + _currentStory.VideoPath);
+            await _dbService.SaveStoryAsync(_currentStory);
 
-                string html = $@"
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset='UTF-8'>
-                        <style>
-                            body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }}
-                            video {{ max-width: 100%; max-height: 100%; }}
-                            #playButton {{
-                                position: absolute;
-                                width: 120px; height: 120px;
-                                background: rgba(0,0,0,0.7);
-                                border-radius: 50%;
-                                border: 4px solid white;
-                                display: flex; justify-content: center; align-items: center;
-                                cursor: pointer; transition: 0.3s; z-index: 10;
-                            }}
-                            #playButton:hover {{ transform: scale(1.1); background: rgba(0,0,0,0.9); }}
-                            #playButton::after {{
-                                content: ''; border-style: solid; border-width: 25px 0 25px 40px;
-                                border-color: transparent transparent transparent white; margin-left: 10px;
-                            }}
-                            #overlayText {{
-                                position: absolute; bottom: 20%; color: white; font-size: 18px;
-                                background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 20px;
-                            }}
-                        </style>
-                    </head>
-                    <body>
-                        <div id='playButton' onclick='startVideo()'></div>
-                        <div id='overlayText'>Video Hazır! Başlatmak için tıklayın.</div>
-                        <video id='myVideo' controls style='display:none;'>
-                            <source src='{videoUrl}' type='video/mp4'>
-                        </video>
-                        <script>
-                            function startVideo() {{
-                                var v = document.getElementById('myVideo');
-                                v.style.display = 'block';
-                                document.getElementById('playButton').style.display = 'none';
-                                document.getElementById('overlayText').style.display = 'none';
-                                v.play();
-                            }}
-                        </script>
-                    </body>
-                    </html>";
+            tabControlMedia.SelectedTab = tabPageVideo;
 
-                webViewVideo.CoreWebView2.NavigateToString(html);
-            } 
-            catch (Exception ex) {
-                Log("Video oynatıcı hatası: " + ex.Message);
-            }
+            string fileName = Path.GetFileName(_currentStory.VideoPath);
+            string videoUrl = $"https://app.local/{fileName}";
+
+            string html = $@"
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset='UTF-8'>
+                    <style>
+                        body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }}
+                        video {{ max-width: 100%; max-height: 100%; }}
+                        #playButton {{
+                            position: absolute;
+                            width: 120px; height: 120px;
+                            background: rgba(0,0,0,0.7);
+                            border-radius: 50%;
+                            border: 4px solid white;
+                            display: flex; justify-content: center; align-items: center;
+                            cursor: pointer; transition: 0.3s; z-index: 10;
+                        }}
+                        #playButton:hover {{ transform: scale(1.1); background: rgba(0,0,0,0.9); }}
+                        #playButton::after {{
+                            content: ''; border-style: solid; border-width: 25px 0 25px 40px;
+                            border-color: transparent transparent transparent white; margin-left: 10px;     
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div id='playButton' onclick='startVideo()'></div>
+                    <video id='myVideo' controls style='display:none;'>
+                        <source src='{videoUrl}' type='video/mp4'>
+                    </video>
+                    <script>
+                        function startVideo() {{
+                            var v = document.getElementById('myVideo');
+                            v.style.display = 'block';
+                            document.getElementById('playButton').style.display = 'none';
+                            v.play();
+                        }}
+                    </script>
+                </body>
+                </html>";
+
+            webViewVideo.CoreWebView2.NavigateToString(html);
         }
         catch (Exception ex)
         {
@@ -238,23 +277,14 @@ public partial class Form1 : Form
 
     private async void btnSpeak_Click(object sender, EventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(txtStoryContent.Text))
-        {
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(txtStoryContent.Text)) return;
         try
         {
             btnSpeak.Enabled = false;
             Log("Metin seslendiriliyor...");
-
-            // Eğer daha önce ses oluşturulmamışsa veya metin değişmişse (opsiyonel basit kontrol)
-            // burada doğrudan yeni bir ses dosyası üretip çalıyoruz.
             string audioPath = await _ttsService.GenerateAudioAsync(txtStoryContent.Text);
-            
             _player.SoundLocation = audioPath;
             _player.Play();
-            
             Log("Seslendirme başladı.");
         }
         catch (Exception ex)
