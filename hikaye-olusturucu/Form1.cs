@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -63,9 +63,11 @@ public partial class Form1 : Form
         StyleButton(btnGenerateVideo, SecondaryAccentColor, Color.FromArgb(17, 17, 27));
         StyleButton(btnSpeak, SurfaceColor, TextColor);
         StyleButton(btnStop, SurfaceColor, TextColor);
+        StyleButton(btnToggleLog, SurfaceColor, TextColor);
 
-        btnGenerateStory.Text = "Hikaye Oluştur";
-        btnGenerateVideo.Text = "Video Oluştur";
+        btnGenerateStory.Text = "Hikaye Olu\u015Ftur";
+        btnGenerateVideo.Text = "Video Olu\u015Ftur";
+        btnToggleLog.Text = "\u25BC Loglar";
 
         tabControlMedia.BackColor = BackColorDark;
         tabPageImages.BackColor = BackColorDark;
@@ -228,36 +230,103 @@ public partial class Form1 : Form
                 <head>
                     <meta charset='UTF-8'>
                     <style>
-                        body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }}
-                        video {{ max-width: 100%; max-height: 100%; }}
+                        body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: white; }}
+                        .video-container {{ position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; }}
+                        video {{ max-width: 100%; max-height: 100%; transition: filter 2s ease-in-out; }}
+                        
+                        /* Efekt Tanımları */
+                        .effect-noir {{ filter: grayscale(100%) contrast(1.2) brightness(0.9); }}
+                        .effect-vintage {{ filter: sepia(0.6) contrast(1.1) brightness(0.9) saturate(0.7); }}
+                        .effect-dreamy {{ filter: brightness(1.1) saturate(1.3) blur(0.3px); }}
+                        .effect-warm {{ filter: sepia(0.2) saturate(1.6) hue-rotate(-10deg); }}
+                        .effect-cool {{ filter: hue-rotate(180deg) saturate(1.2) brightness(1.1); }}
+                        
+                        .vignette {{
+                            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                            pointer-events: none;
+                            background: radial-gradient(circle, transparent 30%, rgba(0,0,0,0.6) 100%);
+                            z-index: 5; opacity: 0; transition: opacity 2s ease;
+                        }}
+
                         #playButton {{
                             position: absolute;
-                            width: 120px; height: 120px;
-                            background: rgba(0,0,0,0.7);
+                            width: 100px; height: 100px;
+                            background: rgba(137, 180, 250, 0.4);
                             border-radius: 50%;
-                            border: 4px solid white;
+                            border: 3px solid #89b4fa;
                             display: flex; justify-content: center; align-items: center;
                             cursor: pointer; transition: 0.3s; z-index: 10;
                         }}
-                        #playButton:hover {{ transform: scale(1.1); background: rgba(0,0,0,0.9); }}
+                        #playButton:hover {{ transform: scale(1.1); background: rgba(137, 180, 250, 0.6); }}
                         #playButton::after {{
-                            content: ''; border-style: solid; border-width: 25px 0 25px 40px;
-                            border-color: transparent transparent transparent white; margin-left: 10px;     
+                            content: ''; border-style: solid; border-width: 20px 0 20px 32px;
+                            border-color: transparent transparent transparent white; margin-left: 8px;     
+                        }}
+                        
+                        .effect-label {{
+                            position: absolute; top: 20px; right: 20px;
+                            background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 15px;
+                            font-size: 12px; letter-spacing: 1px; color: #89b4fa;
+                            opacity: 0; transition: opacity 0.5s; z-index: 20;
+                            text-transform: uppercase; border: 1px solid rgba(137,180,250,0.3);
                         }}
                     </style>
                 </head>
                 <body>
-                    <div id='playButton' onclick='startVideo()'></div>
-                    <video id='myVideo' controls style='display:none;'>
-                        <source src='{videoUrl}' type='video/mp4'>
-                    </video>
+                    <div class='video-container'>
+                        <div id='playButton' onclick='startVideo()'></div>
+                        <video id='myVideo' controls style='display:none;'>
+                            <source src='{videoUrl}' type='video/mp4'>
+                        </video>
+                        <div id='vignette' class='vignette'></div>
+                        <div id='effectLabel' class='effect-label'>Sinematik Mod</div>
+                    </div>
+
                     <script>
+                        var v = document.getElementById('myVideo');
+                        var vignette = document.getElementById('vignette');
+                        var label = document.getElementById('effectLabel');
+                        
+                        const effects = ['none', 'noir', 'vintage', 'dreamy', 'warm', 'cool'];
+                        let currentEffectIndex = 0;
+                        let effectInterval;
+
                         function startVideo() {{
-                            var v = document.getElementById('myVideo');
                             v.style.display = 'block';
                             document.getElementById('playButton').style.display = 'none';
                             v.play();
+                            
+                            // Efekt geçişlerini başlat
+                            vignette.style.opacity = '1';
+                            label.style.opacity = '0.7';
+                            
+                            effectInterval = setInterval(cycleEffect, 6000); // Her 6 saniyede bir değiştir
                         }}
+
+                        function cycleEffect() {{
+                            if (v.paused || v.ended) return;
+
+                            currentEffectIndex = (currentEffectIndex + 1) % effects.length;
+                            const effect = effects[currentEffectIndex];
+                            
+                            v.className = '';
+                            if (effect !== 'none') {{
+                                v.classList.add('effect-' + effect);
+                                label.innerText = 'Efekt: ' + effect;
+                            }} else {{
+                                label.innerText = 'Efekt: Normal';
+                            }}
+                            
+                            // Etiketi kısa süreliğine parlat
+                            label.style.opacity = '1';
+                            setTimeout(() => {{ label.style.opacity = '0.6'; }}, 1000);
+                        }}
+
+                        v.onended = function() {{
+                            clearInterval(effectInterval);
+                            label.style.opacity = '0';
+                            vignette.style.opacity = '0';
+                        }};
                     </script>
                 </body>
                 </html>";
@@ -307,6 +376,27 @@ public partial class Form1 : Form
         catch (Exception ex)
         {
             Log("Durdurma hatası: " + ex.Message);
+        }
+    }
+
+        private void btnToggleLog_Click(object sender, EventArgs e)
+    {
+        txtLog.Visible = !txtLog.Visible;
+        btnToggleLog.Text = txtLog.Visible ? "\u25BC Loglar" : "\u25B6 Loglar";
+
+        if (txtLog.Visible)
+        {
+            txtStoryContent.Height = 200;
+            btnToggleLog.Top = 255;
+            btnSpeak.Top = 225;
+            btnStop.Top = 225;
+        }
+        else
+        {
+            btnToggleLog.Top = 406;
+            txtStoryContent.Height = 351;
+            btnSpeak.Top = 376;
+            btnStop.Top = 376;
         }
     }
 

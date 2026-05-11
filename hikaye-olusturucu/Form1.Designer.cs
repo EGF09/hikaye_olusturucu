@@ -1,4 +1,4 @@
-namespace hikaye_olusturucu
+﻿namespace hikaye_olusturucu
 {
     partial class Form1
     {
@@ -10,6 +10,7 @@ namespace hikaye_olusturucu
         private System.Windows.Forms.Button btnGenerateVideo;
         private System.Windows.Forms.Button btnSpeak;
         private System.Windows.Forms.Button btnStop;
+        private System.Windows.Forms.Button btnToggleLog;
         private System.Windows.Forms.TextBox txtLog;
         private System.Windows.Forms.Label lblPrompt;
         private System.Windows.Forms.TabControl tabControlMedia;
@@ -35,6 +36,7 @@ namespace hikaye_olusturucu
             this.btnGenerateVideo = new System.Windows.Forms.Button();
             this.btnSpeak = new System.Windows.Forms.Button();
             this.btnStop = new System.Windows.Forms.Button();
+            this.btnToggleLog = new System.Windows.Forms.Button();
             this.txtLog = new System.Windows.Forms.TextBox();
             this.lblPrompt = new System.Windows.Forms.Label();
             this.tabControlMedia = new System.Windows.Forms.TabControl();
@@ -61,10 +63,10 @@ namespace hikaye_olusturucu
             // 
             // txtPrompt
             // 
-            this.txtPrompt.Location = new System.Drawing.Point(85, 10); // Aradaki boşluk artırıldı (X=85)
+            this.txtPrompt.Location = new System.Drawing.Point(85, 10); // Aradaki boÅŸluk artÄ±rÄ±ldÄ± (X=85)
             this.txtPrompt.Multiline = true;
             this.txtPrompt.Name = "txtPrompt";
-            this.txtPrompt.Size = new System.Drawing.Size(415, 30); // Genişlik çakışmayı önleyecek şekilde ayarlandı
+            this.txtPrompt.Size = new System.Drawing.Size(415, 30); // GeniÅŸlik Ã§akÄ±ÅŸmayÄ± Ã¶nleyecek ÅŸekilde ayarlandÄ±
             this.txtPrompt.TabIndex = 0;
 
             // 
@@ -74,7 +76,7 @@ namespace hikaye_olusturucu
             this.btnGenerateStory.Name = "btnGenerateStory";
             this.btnGenerateStory.Size = new System.Drawing.Size(145, 30);
             this.btnGenerateStory.TabIndex = 1;
-            this.btnGenerateStory.Text = "Hikaye Oluştur";
+            this.btnGenerateStory.Text = "Hikaye Olu\u015Ftur";
             this.btnGenerateStory.UseVisualStyleBackColor = true;
             this.btnGenerateStory.Click += new System.EventHandler(this.btnGenerateStory_Click);
 
@@ -86,7 +88,7 @@ namespace hikaye_olusturucu
             this.btnGenerateVideo.Name = "btnGenerateVideo";
             this.btnGenerateVideo.Size = new System.Drawing.Size(145, 30);
             this.btnGenerateVideo.TabIndex = 4;
-            this.btnGenerateVideo.Text = "Video Oluştur";
+            this.btnGenerateVideo.Text = "Video Olu\u015Ftur";
             this.btnGenerateVideo.UseVisualStyleBackColor = true;
             this.btnGenerateVideo.Click += new System.EventHandler(this.btnGenerateVideo_Click);
 
@@ -110,7 +112,7 @@ namespace hikaye_olusturucu
             this.btnSpeak.Name = "btnSpeak";
             this.btnSpeak.Size = new System.Drawing.Size(25, 25);
             this.btnSpeak.TabIndex = 7;
-            this.btnSpeak.Text = "🔊";
+            this.btnSpeak.Text = "\uD83D\uDD0A";
             this.btnSpeak.UseVisualStyleBackColor = false;
             this.btnSpeak.Click += new System.EventHandler(this.btnSpeak_Click);
 
@@ -123,7 +125,7 @@ namespace hikaye_olusturucu
             this.btnStop.Name = "btnStop";
             this.btnStop.Size = new System.Drawing.Size(25, 25);
             this.btnStop.TabIndex = 8;
-            this.btnStop.Text = "⏹";
+            this.btnStop.Text = "\u25A0";
             this.btnStop.UseVisualStyleBackColor = false;
             this.btnStop.Click += new System.EventHandler(this.btnStop_Click);
 
@@ -149,7 +151,7 @@ namespace hikaye_olusturucu
             this.tabPageImages.Padding = new System.Windows.Forms.Padding(3);
             this.tabPageImages.Size = new System.Drawing.Size(382, 326);
             this.tabPageImages.TabIndex = 0;
-            this.tabPageImages.Text = "Görseller";
+            this.tabPageImages.Text = "G\u00F6rseller";
             this.tabPageImages.UseVisualStyleBackColor = true;
 
             // 
@@ -171,7 +173,7 @@ namespace hikaye_olusturucu
             this.tabPageVideo.Padding = new System.Windows.Forms.Padding(3);
             this.tabPageVideo.Size = new System.Drawing.Size(382, 326);
             this.tabPageVideo.TabIndex = 1;
-            this.tabPageVideo.Text = "Video Oynatıcı";
+            this.tabPageVideo.Text = "Video Oynat\u0131c\u0131";
             this.tabPageVideo.UseVisualStyleBackColor = true;
 
             // 
@@ -188,9 +190,19 @@ namespace hikaye_olusturucu
             this.webViewVideo.ZoomFactor = 1D;
 
             // 
+            // btnToggleLog
+            // 
+            this.btnToggleLog.Location = new System.Drawing.Point(15, 255);
+            this.btnToggleLog.Name = "btnToggleLog";
+            this.btnToggleLog.Size = new System.Drawing.Size(380, 25);
+            this.btnToggleLog.TabIndex = 9;
+            this.btnToggleLog.Text = "\u25BC Loglar";
+            this.btnToggleLog.UseVisualStyleBackColor = true;
+            this.btnToggleLog.Click += new System.EventHandler(this.btnToggleLog_Click);
+            // 
             // txtLog
             // 
-            this.txtLog.Location = new System.Drawing.Point(15, 270);
+            this.txtLog.Location = new System.Drawing.Point(15, 280);
             this.txtLog.Multiline = true;
             this.txtLog.Name = "txtLog";
             this.txtLog.ReadOnly = true;
@@ -205,6 +217,7 @@ namespace hikaye_olusturucu
             this.Controls.Add(this.btnStop);
             this.Controls.Add(this.btnSpeak);
             this.Controls.Add(this.lblPrompt);
+            this.Controls.Add(this.btnToggleLog);
             this.Controls.Add(this.txtLog);
             this.Controls.Add(this.btnGenerateVideo);
             this.Controls.Add(this.tabControlMedia);
@@ -212,7 +225,7 @@ namespace hikaye_olusturucu
             this.Controls.Add(this.btnGenerateStory);
             this.Controls.Add(this.txtPrompt);
             this.Name = "Form1";
-            this.Text = "AI Hikaye ve Video Oluşturucu";
+            this.Text = "AI Hikaye ve Video Olu\u015Fturucu";
             this.Load += new System.EventHandler(this.Form1_Load);
 
             this.tabControlMedia.ResumeLayout(false);
