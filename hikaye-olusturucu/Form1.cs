@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -65,14 +65,36 @@ public partial class Form1 : Form
         StyleButton(btnStop, SurfaceColor, TextColor);
         StyleButton(btnToggleLog, SurfaceColor, TextColor);
 
-        btnGenerateStory.Text = "Hikaye Olu\u015Ftur";
-        btnGenerateVideo.Text = "Video Olu\u015Ftur";
-        btnToggleLog.Text = "\u25BC Loglar";
+        btnGenerateStory.Text = "Hikaye Oluştur";
+        btnGenerateVideo.Text = "Video Oluştur";
+        btnToggleLog.Text = "▼ Loglar";
 
+        tabControlMedia.DrawMode = TabDrawMode.OwnerDrawFixed;
+        tabControlMedia.DrawItem += TabControlMedia_DrawItem;
         tabControlMedia.BackColor = BackColorDark;
         tabPageImages.BackColor = BackColorDark;
         tabPageVideo.BackColor = BackColorDark;
         flowLayoutPanelImages.BackColor = BackColorDark;
+    }
+
+    private void TabControlMedia_DrawItem(object sender, DrawItemEventArgs e)
+    {
+        var tc = (TabControl)sender;
+        var tp = tc.TabPages[e.Index];
+        var r = tc.GetTabRect(e.Index);
+
+        using var backBrush = new SolidBrush(BackColorDark);
+        e.Graphics.FillRectangle(backBrush, r);
+
+        var text = tp.Text;
+        var font = new Font(tc.Font, FontStyle.Bold);
+        var textSize = e.Graphics.MeasureString(text, font);
+
+        var textX = r.Left + (r.Width - textSize.Width) / 2;
+        var textY = r.Top + (r.Height - textSize.Height) / 2;
+
+        using var textBrush = new SolidBrush(SecondaryAccentColor);
+        e.Graphics.DrawString(text, font, textBrush, textX, textY);
     }
 
     private void StyleTextBox(TextBox tb)
@@ -160,7 +182,7 @@ public partial class Form1 : Form
 
             txtStoryContent.Text = $"{(_currentStory.Title ?? "BÖLÜM").ToUpper()}\r\n\r\n{_currentStory.Content}";
 
-            Log("DALL-E ile görseller üretiliyor...");
+            Log("Görseller yapay zeka ile üretiliyor...");
             _currentStory.ImagePaths = await _imageService.GenerateImagesAsync(_currentStory.Content, 3);       
 
             flowLayoutPanelImages.Controls.Clear();
@@ -232,15 +254,8 @@ public partial class Form1 : Form
                     <style>
                         body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: white; }}
                         .video-container {{ position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; }}
-                        video {{ max-width: 100%; max-height: 100%; transition: filter 2s ease-in-out; }}
-                        
-                        /* Efekt Tanımları */
-                        .effect-noir {{ filter: grayscale(100%) contrast(1.2) brightness(0.9); }}
-                        .effect-vintage {{ filter: sepia(0.6) contrast(1.1) brightness(0.9) saturate(0.7); }}
-                        .effect-dreamy {{ filter: brightness(1.1) saturate(1.3) blur(0.3px); }}
-                        .effect-warm {{ filter: sepia(0.2) saturate(1.6) hue-rotate(-10deg); }}
-                        .effect-cool {{ filter: hue-rotate(180deg) saturate(1.2) brightness(1.1); }}
-                        
+                        video {{ max-width: 100%; max-height: 100%; }}       
+
                         .vignette {{
                             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
                             pointer-events: none;
@@ -257,18 +272,10 @@ public partial class Form1 : Form
                             display: flex; justify-content: center; align-items: center;
                             cursor: pointer; transition: 0.3s; z-index: 10;
                         }}
-                        #playButton:hover {{ transform: scale(1.1); background: rgba(137, 180, 250, 0.6); }}
+                        #playButton:hover {{ transform: scale(1.1); background: rgba(137, 180, 250, 0.6); }}    
                         #playButton::after {{
                             content: ''; border-style: solid; border-width: 20px 0 20px 32px;
-                            border-color: transparent transparent transparent white; margin-left: 8px;     
-                        }}
-                        
-                        .effect-label {{
-                            position: absolute; top: 20px; right: 20px;
-                            background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 15px;
-                            font-size: 12px; letter-spacing: 1px; color: #89b4fa;
-                            opacity: 0; transition: opacity 0.5s; z-index: 20;
-                            text-transform: uppercase; border: 1px solid rgba(137,180,250,0.3);
+                            border-color: transparent transparent transparent white; margin-left: 8px;
                         }}
                     </style>
                 </head>
@@ -279,52 +286,20 @@ public partial class Form1 : Form
                             <source src='{videoUrl}' type='video/mp4'>
                         </video>
                         <div id='vignette' class='vignette'></div>
-                        <div id='effectLabel' class='effect-label'>Sinematik Mod</div>
                     </div>
 
                     <script>
                         var v = document.getElementById('myVideo');
                         var vignette = document.getElementById('vignette');
-                        var label = document.getElementById('effectLabel');
-                        
-                        const effects = ['none', 'noir', 'vintage', 'dreamy', 'warm', 'cool'];
-                        let currentEffectIndex = 0;
-                        let effectInterval;
 
                         function startVideo() {{
                             v.style.display = 'block';
                             document.getElementById('playButton').style.display = 'none';
                             v.play();
-                            
-                            // Efekt geçişlerini başlat
                             vignette.style.opacity = '1';
-                            label.style.opacity = '0.7';
-                            
-                            effectInterval = setInterval(cycleEffect, 6000); // Her 6 saniyede bir değiştir
-                        }}
-
-                        function cycleEffect() {{
-                            if (v.paused || v.ended) return;
-
-                            currentEffectIndex = (currentEffectIndex + 1) % effects.length;
-                            const effect = effects[currentEffectIndex];
-                            
-                            v.className = '';
-                            if (effect !== 'none') {{
-                                v.classList.add('effect-' + effect);
-                                label.innerText = 'Efekt: ' + effect;
-                            }} else {{
-                                label.innerText = 'Efekt: Normal';
-                            }}
-                            
-                            // Etiketi kısa süreliğine parlat
-                            label.style.opacity = '1';
-                            setTimeout(() => {{ label.style.opacity = '0.6'; }}, 1000);
                         }}
 
                         v.onended = function() {{
-                            clearInterval(effectInterval);
-                            label.style.opacity = '0';
                             vignette.style.opacity = '0';
                         }};
                     </script>
@@ -382,7 +357,7 @@ public partial class Form1 : Form
         private void btnToggleLog_Click(object sender, EventArgs e)
     {
         txtLog.Visible = !txtLog.Visible;
-        btnToggleLog.Text = txtLog.Visible ? "\u25BC Loglar" : "\u25B6 Loglar";
+        btnToggleLog.Text = txtLog.Visible ? "▼ Loglar" : "▶ Loglar";
 
         if (txtLog.Visible)
         {

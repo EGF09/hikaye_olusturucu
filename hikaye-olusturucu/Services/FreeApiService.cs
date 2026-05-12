@@ -47,7 +47,6 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
         {
             try
             {
-                // POST isteği daha güvenilirdir ve URL uzunluk sınırına takılmaz
                 var requestBody = new
                 {
                     messages = new[]
@@ -63,13 +62,13 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
                 var content = new StringContent(jsonContext, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync("https://text.pollinations.ai/", content);
-                
+
                 if (response.IsSuccessStatusCode)
                 {
                     string result = await response.Content.ReadAsStringAsync();
                     if (!string.IsNullOrWhiteSpace(result)) return result;
                 }
-                
+
                 errors.Add($"{model}: {response.StatusCode}");
             }
             catch (Exception ex)
@@ -84,23 +83,60 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
     public async Task<List<string>> GenerateImagesAsync(string storyContent, int count = 3)
     {
         var imagePaths = new List<string>();
-        string basePrompt = $"Cinematic, highly detailed digital art: {storyContent.Substring(0, Math.Min(storyContent.Length, 250))}";
-
-        for (int i = 0; i < count; i++)
-        {
-            try
-            {
-                string prompt = $"{basePrompt} - Part {i + 1}";
-                string url = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(prompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}";
-
-                var imageBytes = await _httpClient.GetByteArrayAsync(url);
-                string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
-                await File.WriteAllBytesAsync(filePath, imageBytes);
-                imagePaths.Add(filePath);
-            }
-            catch { continue; }
-        }
         
+        try 
+        {
+            // Hikayeden İngilizce görsel promptları türet
+            string promptGenRequest = $"Aşağıdaki hikaye için görsel oluşturmaya uygun, detaylı ve İngilizce {count} adet prompt hazırla. Her biri hikayenin farklı bir bölümünü temsil etsin. Sadece promptları döndür, numara veya açıklama ekleme. Her prompt yeni bir satırda olsun.\n\nHikaye: {storyContent}";
+            string rawPrompts = await CallTextApi(promptGenRequest);
+            var prompts = rawPrompts.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                                   .Select(p => p.Trim().Trim('1', '2', '3', '.', '-', '*', ' ', '"'))
+                                   .Where(p => !string.IsNullOrWhiteSpace(p))
+                                   .Take(count)
+                                   .ToList();
+
+            for (int i = 0; i < count; i++)
+            {
+                bool success = false;
+                for (int attempt = 0; attempt < 2 && !success; attempt++)
+                {
+                    try
+                    {
+                        string currentPrompt = i < prompts.Count ? prompts[i] : $"Cinematic, highly detailed digital art, scene {i + 1} of: {storyContent.Substring(0, Math.Min(storyContent.Length, 100))}";
+                        string finalPrompt = $"Cinematic, detailed digital art, 8k, realistic lighting, epic composition: {currentPrompt}";
+                        string url = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(finalPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}";
+
+                        var imageBytes = await _httpClient.GetByteArrayAsync(url);
+                        if (imageBytes.Length < 1000) continue;
+
+                        string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
+                        await File.WriteAllBytesAsync(filePath, imageBytes);
+                        imagePaths.Add(filePath);
+                        success = true;
+                    }
+                    catch { continue; }
+                }
+            }
+        }
+        catch 
+        {
+            // Genel hata durumunda eski basit yönteme dön
+            string basePrompt = $"Cinematic, highly detailed digital art: {storyContent.Substring(0, Math.Min(storyContent.Length, 250))}";
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    string prompt = $"{basePrompt} - Part {i + 1}";
+                    string url = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(prompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}";
+                    var imageBytes = await _httpClient.GetByteArrayAsync(url);
+                    string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
+                    await File.WriteAllBytesAsync(filePath, imageBytes);
+                    imagePaths.Add(filePath);
+                }
+                catch { continue; }
+            }
+        }
+
         if (imagePaths.Count == 0) throw new Exception("Görsel servisi şu an yanıt vermiyor.");
         return imagePaths;
     }
