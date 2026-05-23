@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using hikaye_olusturucu.Core.Interfaces;
 using hikaye_olusturucu.Core.Models;
 using Microsoft.Web.WebView2.Core;
-using Windows.Media.SpeechSynthesis;
+using NAudio.Wave;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -24,7 +24,13 @@ public partial class Form1 : Form
     private readonly IDatabaseService _dbService;
 
     private Story _currentStory = new();
-    private System.Media.SoundPlayer _player = new();
+    
+    private WaveOutEvent _waveOut;
+    private AudioFileReader _audioFileReader;
+
+    private Button btnSaveText;
+    private Button btnSaveAudio;
+    private Button btnSaveVideo;
 
     private FormWindowState _previousWindowState;
     private FormBorderStyle _previousBorderStyle;
@@ -44,7 +50,25 @@ public partial class Form1 : Form
         _ttsService = ttsService;
         _videoService = videoService;
         _dbService = dbService;
+        
+        txtPrompt.KeyDown += TxtPrompt_KeyDown;
+        
         ApplyTheme();
+    }
+
+    private void TxtPrompt_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
+        {
+            if (!e.Shift)
+            {
+                e.SuppressKeyPress = true;
+                if (btnGenerateStory.Enabled)
+                {
+                    btnGenerateStory.PerformClick();
+                }
+            }
+        }
     }
 
     private void ApplyTheme()
@@ -58,6 +82,36 @@ public partial class Form1 : Form
         StyleTextBox(txtPrompt);
         StyleTextBox(txtStoryContent);
         StyleTextBox(txtLog);
+
+        btnSpeak.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        btnStop.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+
+        btnSaveText = new Button();
+        btnSaveText.Text = "⭳";
+        btnSaveText.Size = new Size(25, 25);
+        btnSaveText.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        StyleButton(btnSaveText, SurfaceColor, TextColor);
+        btnSaveText.Click += BtnSaveText_Click;
+        this.Controls.Add(btnSaveText);
+
+        btnSaveAudio = new Button();
+        btnSaveAudio.Text = "⭳";
+        btnSaveAudio.Size = new Size(25, 25);
+        btnSaveAudio.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        StyleButton(btnSaveAudio, SurfaceColor, TextColor);
+        btnSaveAudio.Click += BtnSaveAudio_Click;
+        this.Controls.Add(btnSaveAudio);
+
+        btnGenerateVideo.Width = 115;
+        
+        btnSaveVideo = new Button();
+        btnSaveVideo.Text = "⭳";
+        btnSaveVideo.Size = new Size(25, 30);
+        StyleButton(btnSaveVideo, SurfaceColor, TextColor);
+        btnSaveVideo.Click += BtnSaveVideo_Click;
+        btnSaveVideo.Location = new Point(btnGenerateVideo.Right + 5, btnGenerateVideo.Top);
+        btnSaveVideo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        this.Controls.Add(btnSaveVideo);
 
         StyleButton(btnGenerateStory, SecondaryAccentColor, Color.FromArgb(17, 17, 27));
         StyleButton(btnGenerateVideo, SecondaryAccentColor, Color.FromArgb(17, 17, 27));
@@ -75,6 +129,9 @@ public partial class Form1 : Form
         tabPageImages.BackColor = BackColorDark;
         tabPageVideo.BackColor = BackColorDark;
         flowLayoutPanelImages.BackColor = BackColorDark;
+        
+        this.Resize += (s, e) => UpdateLeftPanelLayout();
+        UpdateLeftPanelLayout();
     }
 
     private void TabControlMedia_DrawItem(object sender, DrawItemEventArgs e)
@@ -190,15 +247,55 @@ public partial class Form1 : Form
             {
                 if (File.Exists(path))
                 {
-                    var pb = new PictureBox
+                    var panel = new Panel
                     {
-                        Image = Image.FromFile(path),
-                        SizeMode = PictureBoxSizeMode.Zoom,
                         Width = 330,
                         Height = 330,
                         Margin = new Padding(5)
                     };
-                    flowLayoutPanelImages.Controls.Add(pb);
+
+                    var pb = new PictureBox
+                    {
+                        Image = Image.FromFile(path),
+                        SizeMode = PictureBoxSizeMode.Zoom,
+                        Dock = DockStyle.Fill
+                    };
+
+                    var btnDownloadImg = new Button
+                    {
+                        Text = "📥",
+                        Size = new Size(35, 35),
+                        BackColor = SurfaceColor,
+                        ForeColor = TextColor,
+                        FlatStyle = FlatStyle.Flat,
+                        Cursor = Cursors.Hand,
+                        Font = new Font("Segoe UI", 12F)
+                    };
+                    btnDownloadImg.FlatAppearance.BorderSize = 0;
+                    btnDownloadImg.Tag = path;
+                    btnDownloadImg.Click += (s, ev) =>
+                    {
+                        using (SaveFileDialog sfd = new SaveFileDialog())
+                        {
+                            sfd.Filter = "Görsel|*.png;*.jpg;*.jpeg";
+                            sfd.Title = "Görseli Farklı Kaydet";
+                            sfd.FileName = Path.GetFileName((string)((Button)s).Tag);
+                            if (sfd.ShowDialog() == DialogResult.OK)
+                            {
+                                File.Copy((string)((Button)s).Tag, sfd.FileName, true);
+                                MessageBox.Show("Görsel başarıyla kaydedildi.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                        }
+                    };
+
+                    panel.Controls.Add(btnDownloadImg);
+                    panel.Controls.Add(pb);
+
+                    btnDownloadImg.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+                    btnDownloadImg.Location = new Point(panel.Width - btnDownloadImg.Width - 5, panel.Height - btnDownloadImg.Height - 5);
+                    btnDownloadImg.BringToFront();
+
+                    flowLayoutPanelImages.Controls.Add(panel);
                 }
             }
 
@@ -245,6 +342,13 @@ public partial class Form1 : Form
 
             string fileName = Path.GetFileName(_currentStory.VideoPath);
             string videoUrl = $"https://app.local/{fileName}";
+            
+            // WebVTT dosyasını Base64 formatına çevirerek MIME tipi veya CORS sorunlarını aşalım
+            string vttFileName = Path.ChangeExtension(fileName, ".vtt");
+            string vttPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, vttFileName);
+            string vttContent = File.Exists(vttPath) ? File.ReadAllText(vttPath) : "WEBVTT\n\n";
+            string vttBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(vttContent));
+            string vttDataUrl = $"data:text/vtt;charset=utf-8;base64,{vttBase64}";
 
             string html = $@"
                 <!DOCTYPE html>
@@ -253,8 +357,8 @@ public partial class Form1 : Form
                     <meta charset='UTF-8'>
                     <style>
                         body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: white; }}
-                        .video-container {{ position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; overflow: hidden; }}
-                        video {{ max-width: 100%; max-height: 100%; }}       
+                        .video-container {{ position: relative; width: 100vw; max-width: 100vh; aspect-ratio: 1/1; display: flex; justify-content: center; align-items: center; overflow: hidden; }}
+                        video {{ width: 100%; height: 100%; object-fit: contain; }}       
 
                         .vignette {{
                             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -277,13 +381,23 @@ public partial class Form1 : Form
                             content: ''; border-style: solid; border-width: 20px 0 20px 32px;
                             border-color: transparent transparent transparent white; margin-left: 8px;
                         }}
+                        
+                        /* Subtitle styling */
+                        video::cue {{
+                            background-color: transparent;
+                            color: white;
+                            text-shadow: 2px 2px 4px #000000, -2px -2px 4px #000000, 2px -2px 4px #000000, -2px 2px 4px #000000;
+                            font-size: 1.5em;
+                            font-family: 'Segoe UI', sans-serif;
+                        }}
                     </style>
                 </head>
                 <body>
                     <div class='video-container'>
                         <div id='playButton' onclick='startVideo()'></div>
-                        <video id='myVideo' controls style='display:none;'>
+                        <video id='myVideo' controls style='display:none;' crossorigin='anonymous'>
                             <source src='{videoUrl}' type='video/mp4'>
+                            <track id='subtitleTrack' src='{vttDataUrl}' kind='subtitles' srclang='tr' label='Türkçe' default>
                         </video>
                         <div id='vignette' class='vignette'></div>
                     </div>
@@ -297,6 +411,13 @@ public partial class Form1 : Form
                             document.getElementById('playButton').style.display = 'none';
                             v.play();
                             vignette.style.opacity = '1';
+                            
+                            // Track nesnesini bul ve 'showing' olarak zorla
+                            setTimeout(() => {{
+                                if (v.textTracks && v.textTracks.length > 0) {{
+                                    v.textTracks[0].mode = 'showing';
+                                }}
+                            }}, 100);
                         }}
 
                         v.onended = function() {{
@@ -327,8 +448,14 @@ public partial class Form1 : Form
             btnSpeak.Enabled = false;
             Log("Metin seslendiriliyor...");
             string audioPath = await _ttsService.GenerateAudioAsync(txtStoryContent.Text);
-            _player.SoundLocation = audioPath;
-            _player.Play();
+            
+            StopAudio(); // Eski sesi temizle
+
+            _audioFileReader = new AudioFileReader(audioPath);
+            _waveOut = new WaveOutEvent();
+            _waveOut.Init(_audioFileReader);
+            _waveOut.Play();
+            
             Log("Seslendirme başladı.");
         }
         catch (Exception ex)
@@ -345,7 +472,7 @@ public partial class Form1 : Form
     {
         try
         {
-            _player.Stop();
+            StopAudio();
             Log("Seslendirme durduruldu.");
         }
         catch (Exception ex)
@@ -354,25 +481,64 @@ public partial class Form1 : Form
         }
     }
 
-        private void btnToggleLog_Click(object sender, EventArgs e)
+    private void StopAudio()
     {
-        txtLog.Visible = !txtLog.Visible;
-        btnToggleLog.Text = txtLog.Visible ? "▼ Loglar" : "▶ Loglar";
+        if (_waveOut != null)
+        {
+            _waveOut.Stop();
+            _waveOut.Dispose();
+            _waveOut = null;
+        }
+        if (_audioFileReader != null)
+        {
+            _audioFileReader.Dispose();
+            _audioFileReader = null;
+        }
+    }
+
+    private void UpdateLeftPanelLayout()
+    {
+        int rowHeight = 35; 
 
         if (txtLog.Visible)
         {
-            txtStoryContent.Height = 200;
-            btnToggleLog.Top = 255;
-            btnSpeak.Top = 225;
-            btnStop.Top = 225;
+            txtLog.Height = 151;
+            txtLog.Top = this.ClientSize.Height - txtLog.Height - 4;
+            btnToggleLog.Top = txtLog.Top - btnToggleLog.Height - 4;
         }
         else
         {
-            btnToggleLog.Top = 406;
-            txtStoryContent.Height = 351;
-            btnSpeak.Top = 376;
-            btnStop.Top = 376;
+            btnToggleLog.Top = this.ClientSize.Height - btnToggleLog.Height - 4;
         }
+
+        txtStoryContent.Height = btnToggleLog.Top - txtStoryContent.Top - rowHeight - 4;
+
+        int buttonY = txtStoryContent.Bottom + 5;
+
+        btnStop.Top = buttonY;
+        btnStop.Left = txtStoryContent.Right - btnStop.Width;
+
+        btnSpeak.Top = buttonY;
+        btnSpeak.Left = btnStop.Left - btnSpeak.Width - 5;
+
+        if (btnSaveAudio != null)
+        {
+            btnSaveAudio.Top = buttonY;
+            btnSaveAudio.Left = btnSpeak.Left - btnSaveAudio.Width - 15;
+        }
+
+        if (btnSaveText != null)
+        {
+            btnSaveText.Top = buttonY;
+            btnSaveText.Left = txtStoryContent.Left;
+        }
+    }
+
+    private void btnToggleLog_Click(object sender, EventArgs e)
+    {
+        if (sender != null) txtLog.Visible = !txtLog.Visible;
+        btnToggleLog.Text = txtLog.Visible ? "▼ Loglar" : "▶ Loglar";
+        UpdateLeftPanelLayout();
     }
 
     private void Log(string message)
@@ -384,5 +550,71 @@ public partial class Form1 : Form
     {
         btnGenerateStory.Enabled = enabled;
         txtPrompt.Enabled = enabled;
+    }
+
+    private void BtnSaveText_Click(object sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(txtStoryContent.Text))
+        {
+            MessageBox.Show("Kaydedilecek metin bulunamadı.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using (SaveFileDialog sfd = new SaveFileDialog())
+        {
+            sfd.Filter = "Metin Dosyası|*.txt";
+            sfd.Title = "Metni Farklı Kaydet";
+            sfd.FileName = string.IsNullOrWhiteSpace(_currentStory.Title) ? "Hikaye.txt" : $"{_currentStory.Title}.txt";
+
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                File.WriteAllText(sfd.FileName, txtStoryContent.Text);
+                MessageBox.Show("Metin başarıyla kaydedildi.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+    }
+
+    private void BtnSaveAudio_Click(object sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentStory.AudioPath) || !File.Exists(_currentStory.AudioPath))
+        {
+            MessageBox.Show("Kaydedilecek ses dosyası bulunamadı.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using (SaveFileDialog sfd = new SaveFileDialog())
+        {
+            sfd.Filter = "WAV Ses Dosyası|*.wav|MP3 Ses Dosyası|*.mp3";
+            sfd.Title = "Ses Dosyasını Farklı Kaydet";
+            sfd.FileName = string.IsNullOrWhiteSpace(_currentStory.Title) ? "Ses.wav" : $"{_currentStory.Title}.wav";
+
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                File.Copy(_currentStory.AudioPath, sfd.FileName, true);
+                MessageBox.Show("Ses başarıyla kaydedildi.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+    }
+
+    private void BtnSaveVideo_Click(object sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_currentStory.VideoPath) || !File.Exists(_currentStory.VideoPath))
+        {
+            MessageBox.Show("Kaydedilecek video bulunamadı.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using (SaveFileDialog sfd = new SaveFileDialog())
+        {
+            sfd.Filter = "MP4 Video|*.mp4";
+            sfd.Title = "Videoyu Farklı Kaydet";
+            sfd.FileName = string.IsNullOrWhiteSpace(_currentStory.Title) ? "Video.mp4" : $"{_currentStory.Title}.mp4";
+
+            if (sfd.ShowDialog() == DialogResult.OK)
+            {
+                File.Copy(_currentStory.VideoPath, sfd.FileName, true);
+                MessageBox.Show("Video başarıyla kaydedildi.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
     }
 }

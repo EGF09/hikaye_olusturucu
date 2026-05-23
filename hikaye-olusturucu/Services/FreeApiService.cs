@@ -7,11 +7,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using hikaye_olusturucu.Core.Interfaces;
-using Windows.Media.SpeechSynthesis;
 
 namespace hikaye_olusturucu.Services;
 
-public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
+public class FreeApiService : ILLMService, IImageGenerationService
 {
     private readonly HttpClient _httpClient;
 
@@ -24,7 +23,7 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
 
     public async Task<string> GenerateStoryAsync(string prompt)
     {
-        string systemPrompt = "Sen yaratıcı bir hikaye yazarısın. Sadece hikaye metnini döndür. Teknik açıklamalar ekleme. Hikayeyi kısa (maksimum 3 paragraf), etkileyici ve görsel olarak betimlenebilecek şekilde Türkçe yaz.";
+        string systemPrompt = "Sen ödüllü ve profesyonel bir Türk yazarısın. Dilbilgisi kurallarına tamamen uygun, akıcı, son derece anlamlı ve mantıklı bir Türkçe hikaye yazacaksın. Kesinlikle uydurma kelimeler, anlamsız harf dizileri veya bozuk cümleler kullanma. Sadece hikaye metnini döndür. Teknik açıklamalar ekleme. Hikayeyi kısa (maksimum 3 paragraf), sürükleyici ve görsel olarak kolayca betimlenebilecek detaylarla yaz.";
         string fullPrompt = $"{systemPrompt}\n\nKonu: {prompt}";
 
         return await CallTextApi(fullPrompt);
@@ -139,25 +138,5 @@ public class FreeApiService : ILLMService, IImageGenerationService, ITtsService
 
         if (imagePaths.Count == 0) throw new Exception("Görsel servisi şu an yanıt vermiyor.");
         return imagePaths;
-    }
-
-    public async Task<string> GenerateAudioAsync(string text)
-    {
-        string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"audio_{Guid.NewGuid()}.wav");   
-        using (var synthesizer = new SpeechSynthesizer())
-        {
-            var voices = SpeechSynthesizer.AllVoices;
-            var trVoice = voices.FirstOrDefault(v => v.DisplayName.Contains("Tolga")) ??
-                          voices.FirstOrDefault(v => v.Language.StartsWith("tr", StringComparison.OrdinalIgnoreCase));
-            if (trVoice != null) synthesizer.Voice = trVoice;
-
-            using (var stream = await synthesizer.SynthesizeTextToStreamAsync(text))
-            using (var fileStream = File.Create(filePath))
-            using (var reader = stream.AsStreamForRead())
-            {
-                await reader.CopyToAsync(fileStream);
-            }
-        }
-        return filePath;
     }
 }

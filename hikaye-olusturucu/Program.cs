@@ -31,7 +31,7 @@ static class Program
         
         services.AddSingleton<ILLMService>(freeApiService);
         services.AddSingleton<IImageGenerationService>(freeApiService);
-        services.AddSingleton<ITtsService>(freeApiService);
+        services.AddSingleton<ITtsService, GoogleTtsService>();
         services.AddSingleton<IVideoService>(new FFmpegVideoService(ffmpegPath));
         services.AddSingleton<IDatabaseService>(new SqliteDatabaseService(connStr));
         

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using hikaye_olusturucu.Core.Interfaces;
+using NAudio.Wave;
 
 namespace hikaye_olusturucu.Services;
 
@@ -22,41 +23,13 @@ public class FFmpegVideoService : IVideoService
     {
         try
         {
-            using var fs = File.OpenRead(filePath);
-            using var reader = new BinaryReader(fs);
-            reader.ReadBytes(12); // RIFF, size, WAVE
-            while (fs.Position < fs.Length)
-            {
-                var chunkId = new string(reader.ReadChars(4));
-                var chunkSize = reader.ReadInt32();
-                if (chunkId == "fmt ")
-                {
-                    reader.ReadInt16(); // format tag
-                    reader.ReadInt16(); // channels
-                    reader.ReadInt32(); // sample rate
-                    int byteRate = reader.ReadInt32(); // byte rate
-                    fs.Position += chunkSize - 12; // skip rest of fmt
-
-                    // Now find data chunk
-                    while (fs.Position < fs.Length)
-                    {
-                        chunkId = new string(reader.ReadChars(4));
-                        chunkSize = reader.ReadInt32();
-                        if (chunkId == "data")
-                        {
-                            return (double)chunkSize / byteRate;
-                        }
-                        fs.Position += chunkSize;
-                    }
-                }
-                else
-                {
-                    fs.Position += chunkSize;
-                }
-            }
+            using var reader = new AudioFileReader(filePath);
+            return reader.TotalTime.TotalSeconds;
         }
-        catch { }
-        return 15.0; // Fallback
+        catch 
+        {
+            return 15.0; // Fallback
+        }
     }
 
     public async Task<string> CreateVideoAsync(List<string> imagePaths, string audioPath, string storyContent, string title)
@@ -75,8 +48,8 @@ public class FFmpegVideoService : IVideoService
         int framesPerImage = (int)Math.Round(durationPerImage * fps);
 
         string outputPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"video_{Guid.NewGuid()}.mp4"); 
-        string subtitlePath = CreateSubtitleFile(storyContent, totalAudioDuration);
-        string srtPath = subtitlePath.Replace("\\", "/").Replace(":", "\\:");
+        string vttPath = Path.ChangeExtension(outputPath, ".vtt");
+        CreateSubtitleFile(storyContent, totalAudioDuration, vttPath);
 
         var sbInputs = new StringBuilder();
         var sbFilters = new StringBuilder();
@@ -114,11 +87,8 @@ public class FFmpegVideoService : IVideoService
             sbFilters.Append("[v0]copy[vmerged]; ");
         }
 
-        // Altyazı ekleme
-        sbFilters.Append($"[vmerged]subtitles='{srtPath}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000'[finalv]");
-
         // Ses dosyası en son girdi (index = imagePaths.Count)
-        string arguments = $"-y {sbInputs} -i \"{audioPath}\" -filter_complex \"{sbFilters}\" -map \"[finalv]\" -map {imagePaths.Count}:a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \"{outputPath}\"";
+        string arguments = $"-y {sbInputs} -i \"{audioPath}\" -filter_complex \"{sbFilters}\" -map \"[vmerged]\" -map {imagePaths.Count}:a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \"{outputPath}\"";
 
         var processInfo = new ProcessStartInfo
         {
@@ -146,37 +116,40 @@ public class FFmpegVideoService : IVideoService
         return outputPath;
     }
 
-    private string CreateSubtitleFile(string content, double totalAudioDurationInSeconds)
+    private string CreateSubtitleFile(string content, double totalAudioDurationInSeconds, string vttPath)
     {
-        string srtPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"subs_{Guid.NewGuid()}.srt");     
         var words = content.Split(new[] { ' ', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         int wordsPerSubtitle = 6;
 
         var srtBuilder = new StringBuilder();
-        double timePerWord = totalAudioDurationInSeconds / Math.Max(1, words.Length);
+        srtBuilder.AppendLine("WEBVTT");
+        srtBuilder.AppendLine();
+        
+        // Karakter tabanlı süre hesaplaması (kelime yerine daha isabetli senkronizasyon sağlar)
+        int totalChars = string.Join("", words).Length;
+        double timePerChar = totalChars > 0 ? totalAudioDurationInSeconds / totalChars : 0;
 
         double currentTime = 0;
-        int index = 1;
 
         for (int i = 0; i < words.Length; i += wordsPerSubtitle)
         {
             var chunkWords = words.Skip(i).Take(wordsPerSubtitle).ToArray();
             var chunkStr = string.Join(" ", chunkWords);
-            double chunkDuration = chunkWords.Length * timePerWord;
+            
+            int chunkChars = string.Join("", chunkWords).Length;
+            double chunkDuration = chunkChars * timePerChar;
 
             TimeSpan start = TimeSpan.FromSeconds(currentTime);
             TimeSpan end = TimeSpan.FromSeconds(currentTime + chunkDuration);
 
-            srtBuilder.AppendLine(index.ToString());
-            srtBuilder.AppendLine($"{start:hh\\:mm\\:ss\\,fff} --> {end:hh\\:mm\\:ss\\,fff}");
+            srtBuilder.AppendLine($"{start:hh\\:mm\\:ss\\.fff} --> {end:hh\\:mm\\:ss\\.fff}");
             srtBuilder.AppendLine(chunkStr);
             srtBuilder.AppendLine();
 
             currentTime += chunkDuration;
-            index++;
         }
 
-        File.WriteAllText(srtPath, srtBuilder.ToString());
-        return srtPath;
+        File.WriteAllText(vttPath, srtBuilder.ToString());
+        return vttPath;
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace hikaye_olusturucu
+namespace hikaye_olusturucu
 {
     partial class Form1
     {
@@ -63,11 +63,12 @@
             // 
             // txtPrompt
             // 
-            this.txtPrompt.Location = new System.Drawing.Point(85, 10); // Aradaki boÅŸluk artÄ±rÄ±ldÄ± (X=85)
+            this.txtPrompt.Location = new System.Drawing.Point(85, 10);
             this.txtPrompt.Multiline = true;
             this.txtPrompt.Name = "txtPrompt";
-            this.txtPrompt.Size = new System.Drawing.Size(415, 30); // GeniÅŸlik Ã§akÄ±ÅŸmayÄ± Ã¶nleyecek ÅŸekilde ayarlandÄ±
+            this.txtPrompt.Size = new System.Drawing.Size(415, 30);
             this.txtPrompt.TabIndex = 0;
+            this.txtPrompt.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // btnGenerateStory
@@ -79,6 +80,7 @@
             this.btnGenerateStory.Text = "Hikaye Olu\u015Ftur";
             this.btnGenerateStory.UseVisualStyleBackColor = true;
             this.btnGenerateStory.Click += new System.EventHandler(this.btnGenerateStory_Click);
+            this.btnGenerateStory.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // btnGenerateVideo
@@ -91,6 +93,7 @@
             this.btnGenerateVideo.Text = "Video Olu\u015Ftur";
             this.btnGenerateVideo.UseVisualStyleBackColor = true;
             this.btnGenerateVideo.Click += new System.EventHandler(this.btnGenerateVideo_Click);
+            this.btnGenerateVideo.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // txtStoryContent
@@ -102,6 +105,7 @@
             this.txtStoryContent.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.txtStoryContent.Size = new System.Drawing.Size(380, 200);
             this.txtStoryContent.TabIndex = 2;
+            this.txtStoryContent.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right));
 
             // 
             // btnSpeak
@@ -115,6 +119,7 @@
             this.btnSpeak.Text = "\uD83D\uDD0A";
             this.btnSpeak.UseVisualStyleBackColor = false;
             this.btnSpeak.Click += new System.EventHandler(this.btnSpeak_Click);
+            this.btnSpeak.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // btnStop
@@ -128,6 +133,7 @@
             this.btnStop.Text = "\u25A0";
             this.btnStop.UseVisualStyleBackColor = false;
             this.btnStop.Click += new System.EventHandler(this.btnStop_Click);
+            this.btnStop.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // tabControlMedia
@@ -141,6 +147,7 @@
             this.tabControlMedia.TabIndex = 3;
             this.tabControlMedia.SizeMode = System.Windows.Forms.TabSizeMode.Fixed;
             this.tabControlMedia.ItemSize = new System.Drawing.Size(193, 32);
+            this.tabControlMedia.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // tabPageImages
@@ -199,6 +206,8 @@
             this.btnToggleLog.Text = "\u25BC Loglar";
             this.btnToggleLog.UseVisualStyleBackColor = true;
             this.btnToggleLog.Click += new System.EventHandler(this.btnToggleLog_Click);
+            this.btnToggleLog.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
+
             // 
             // txtLog
             // 
@@ -209,6 +218,7 @@
             this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.txtLog.Size = new System.Drawing.Size(380, 151);
             this.txtLog.TabIndex = 5;
+            this.txtLog.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // Form1
