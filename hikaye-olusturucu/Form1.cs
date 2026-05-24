@@ -42,6 +42,9 @@ public partial class Form1 : Form
     private readonly Color AccentColor = Color.FromArgb(137, 180, 250);
     private readonly Color SecondaryAccentColor = Color.FromArgb(203, 166, 247);
 
+    [System.Runtime.InteropServices.DllImport("uxtheme.dll", ExactSpelling = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
+
     public Form1(ILLMService llmService, IImageGenerationService imageService, ITtsService ttsService, IVideoService videoService, IDatabaseService dbService)
     {
         InitializeComponent();
@@ -124,10 +127,14 @@ public partial class Form1 : Form
         btnToggleLog.Text = "▼ Loglar";
 
         tabControlMedia.DrawMode = TabDrawMode.OwnerDrawFixed;
+        tabControlMedia.SizeMode = TabSizeMode.Fixed;
         tabControlMedia.DrawItem += TabControlMedia_DrawItem;
         tabControlMedia.BackColor = BackColorDark;
         tabPageImages.BackColor = BackColorDark;
         tabPageVideo.BackColor = BackColorDark;
+        tabPageImages.BorderStyle = BorderStyle.None;
+        tabPageVideo.BorderStyle = BorderStyle.None;
+        flowLayoutPanelImages.BorderStyle = BorderStyle.None;
         flowLayoutPanelImages.BackColor = BackColorDark;
         
         this.Resize += (s, e) => UpdateLeftPanelLayout();
@@ -140,9 +147,11 @@ public partial class Form1 : Form
         var tp = tc.TabPages[e.Index];
         var r = tc.GetTabRect(e.Index);
 
+        // 1. Sekmenin kendi arka planını boya
         using var backBrush = new SolidBrush(BackColorDark);
         e.Graphics.FillRectangle(backBrush, r);
 
+        // Sekme metnini yazdır
         var text = tp.Text;
         var font = new Font(tc.Font, FontStyle.Bold);
         var textSize = e.Graphics.MeasureString(text, font);
@@ -152,6 +161,28 @@ public partial class Form1 : Form
 
         using var textBrush = new SolidBrush(SecondaryAccentColor);
         e.Graphics.DrawString(text, font, textBrush, textX, textY);
+
+        // ==========================================
+        // YENİ KISIM: Beyaz Çerçeveyi Griye Dönüştürme
+        // ==========================================
+        if (e.Index == tc.TabCount - 1)
+        {
+            // Sol taraftaki TextBox'ların gri kenarlık rengine (SurfaceColor) eşitleyebilirsin.
+            // Eğer bu gri az gelirse Color.FromArgb(100, 100, 110) gibi statik bir gri de verebilirsin.
+            using var borderPen = new Pen(Color.Gray, 2);
+
+            // TabControl'ün iç sayfa sınırlarını (beyaz çizgilerin olduğu yeri) yakala
+            Rectangle displayRect = tc.DisplayRectangle;
+
+            // Beyaz çizgiyi tamamen kapatması için alanı 1 piksel genişletiyoruz
+            displayRect.X -= 1;
+            displayRect.Y -= 1;
+            displayRect.Width += 2;
+            displayRect.Height += 2;
+
+            // Beyaz parlamanın üzerine gri çerçevemizi çekiyoruz
+            e.Graphics.DrawRectangle(borderPen, displayRect);
+        }
     }
 
     private void StyleTextBox(TextBox tb)
@@ -160,6 +191,12 @@ public partial class Form1 : Form
         tb.ForeColor = TextColor;
         tb.BorderStyle = BorderStyle.FixedSingle;
         tb.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+
+        try
+        {
+            SetWindowTheme(tb.Handle, "DarkMode_Explorer", null);
+        }
+        catch { }
     }
 
     private void StyleButton(Button btn, Color backColor, Color foreColor)
