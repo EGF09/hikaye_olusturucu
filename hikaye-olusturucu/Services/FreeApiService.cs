@@ -32,7 +32,7 @@ public class FreeApiService : ILLMService, IImageGenerationService
 
     public async Task<string> GenerateStoryAsync(string prompt)
     {
-        string systemPrompt = "Sen yaratıcı ve profesyonel bir Türkçe yazarısın. Hikaye 3 paragraf olmalı, her paragraf arasında boşluk olmalı ve ekstra yorum/başlık içermemelidir.";
+        string systemPrompt = "Sen yaratıcı ve profesyonel bir Türkçe yazarısın. Hikaye tam olarak 3 paragraftan oluşmalıdır: 1. paragraf Giriş, 2. paragraf Gelişme, ve 3. paragraf Sonuç bölümünü temsil etmelidir. Her paragraf arasında boş satır bırakılmalı, ekstra açıklama, yorum veya başlık eklenmemelidir.";
         string fullPrompt = $"{systemPrompt}\n\nKonu: {prompt}";
 
         return await GenerateTextContentAsync(fullPrompt);
