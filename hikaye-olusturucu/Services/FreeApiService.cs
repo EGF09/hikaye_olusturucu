@@ -266,59 +266,61 @@ public class FreeApiService : ILLMService, IImageGenerationService
                 string currentPrompt = i < prompts.Count ? prompts[i] : $"Cinematic, highly detailed digital art, scene {i + 1} of: {storyContent.Substring(0, Math.Min(storyContent.Length, 100))}";
                 byte[] imageBytes = null;
 
-                // 1. Hugging Face'i dene (sadece geçerli bir anahtar varsa)
-                bool hasHF = !string.IsNullOrWhiteSpace(_huggingFaceApiKey) && 
-                              !_huggingFaceApiKey.Contains("YOUR_HF_API_KEY");
-                if (hasHF)
+                // 1. Pollinations AI'ı dene (Öncelikli Servis - önce anahtarlı, sonra anahtarsız)
+                bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
+                if (hasPollinationsKey)
                 {
                     try
                     {
-                        var requestBody = new { inputs = currentPrompt };
-                        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                        
-                        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, hfUrl);
-                        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _huggingFaceApiKey);
-                        requestMessage.Content = content;
-
-                        var response = await _httpClient.SendAsync(requestMessage);
-                        if (response.IsSuccessStatusCode)
-                        {
-                            imageBytes = await response.Content.ReadAsByteArrayAsync();
-                        }
+                        string pollinationsUrl = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}&key={Uri.EscapeDataString(_pollinationsApiKey)}";
+                        imageBytes = await _httpClient.GetByteArrayAsync(pollinationsUrl);
                     }
                     catch
                     {
-                        // Sessizce devam et, fallback kullanılacak
+                        imageBytes = null;
                     }
                 }
 
-                // 2. Fallback: Pollinations AI'ı dene (HF başarısızsa veya boş döndüyse)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
-                    bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
-                    
-                    if (hasPollinationsKey)
-                    {
-                        try
-                        {
-                            string pollinationsUrl = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}&key={Uri.EscapeDataString(_pollinationsApiKey)}";
-                            imageBytes = await _httpClient.GetByteArrayAsync(pollinationsUrl);
-                        }
-                        catch
-                        {
-                            // API anahtarı ile hata alındı (bakiye bitmiş veya limit aşılmış olabilir), anahtarsız deneyeceğiz
-                            imageBytes = null;
-                        }
-                    }
-
-                    if (imageBytes == null || imageBytes.Length <= 1000)
+                    try
                     {
                         string pollinationsUrl = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}";
                         imageBytes = await _httpClient.GetByteArrayAsync(pollinationsUrl);
                     }
-                    
-                    // İstekler arası aşırı yükleme ve IP engeli yememek için kısa bir bekleme ekleyelim
-                    await Task.Delay(1000);
+                    catch
+                    {
+                        imageBytes = null;
+                    }
+                }
+
+                // 2. Yedek Servis: Hugging Face'i dene (Pollinations başarısızsa)
+                if (imageBytes == null || imageBytes.Length <= 1000)
+                {
+                    bool hasHF = !string.IsNullOrWhiteSpace(_huggingFaceApiKey) && 
+                                  !_huggingFaceApiKey.Contains("YOUR_HF_API_KEY");
+                    if (hasHF)
+                    {
+                        try
+                        {
+                            var requestBody = new { inputs = currentPrompt };
+                            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                            
+                            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, hfUrl);
+                            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _huggingFaceApiKey);
+                            requestMessage.Content = content;
+
+                            var response = await _httpClient.SendAsync(requestMessage);
+                            if (response.IsSuccessStatusCode)
+                            {
+                                imageBytes = await response.Content.ReadAsByteArrayAsync();
+                            }
+                        }
+                        catch
+                        {
+                            imageBytes = null;
+                        }
+                    }
                 }
 
                 if (imageBytes != null && imageBytes.Length > 1000)
@@ -326,6 +328,12 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
                     await File.WriteAllBytesAsync(filePath, imageBytes);
                     imagePaths.Add(filePath);
+                }
+
+                // Görseller arası hız limitine (Rate Limit) takılmamak için 60 saniye bekleme süresi ekleyelim
+                if (i < count - 1)
+                {
+                    await Task.Delay(60000);
                 }
             }
             catch 
