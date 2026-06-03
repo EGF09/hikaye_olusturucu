@@ -11,9 +11,11 @@ namespace hikaye_olusturucu.Services;
 public class GoogleTtsService : ITtsService
 {
     private readonly HttpClient _httpClient;
+    private readonly string _ffmpegPath;
 
-    public GoogleTtsService()
+    public GoogleTtsService(string ffmpegPath = "ffmpeg")
     {
+        _ffmpegPath = ffmpegPath;
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
     }
@@ -43,8 +45,42 @@ public class GoogleTtsService : ITtsService
             await Task.Delay(100);
         }
 
+        string tempFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_audio_{Guid.NewGuid()}.mp3");
+        await File.WriteAllBytesAsync(tempFilePath, ms.ToArray());
+
         string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"audio_{Guid.NewGuid()}.mp3");
-        await File.WriteAllBytesAsync(filePath, ms.ToArray());
+        
+        var processInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = _ffmpegPath,
+            Arguments = $"-y -i \"{tempFilePath}\" -filter:a \"atempo=1.25\" \"{filePath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new System.Diagnostics.Process { StartInfo = processInfo };
+        StringBuilder errorLog = new StringBuilder();
+        process.ErrorDataReceived += (s, e) => { if (e.Data != null) errorLog.AppendLine(e.Data); };
+
+        process.Start();
+        process.BeginErrorReadLine();
+        await process.WaitForExitAsync();
+
+        try
+        {
+            if (File.Exists(tempFilePath))
+            {
+                File.Delete(tempFilePath);
+            }
+        }
+        catch { }
+
+        if (process.ExitCode != 0)
+        {
+            throw new Exception($"FFmpeg TTS Hızlandırma Hatası!\n\nDetay:\n{errorLog}");
+        }
 
         return filePath;
     }

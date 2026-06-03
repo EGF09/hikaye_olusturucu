@@ -27,11 +27,15 @@ static class Program
         string connStr = config["Database:ConnectionString"] ?? "Data Source=stories.db;Version=3;";
         string ffmpegPath = config["FFmpeg:ExecutablePath"] ?? "ffmpeg";
 
-        var freeApiService = new FreeApiService();
-        
+        string geminiKey = config["ApiKeys:Gemini"] ?? "";
+        string hfKey = config["ApiKeys:HuggingFace"] ?? "";
+        string pollinationsKey = config["ApiKeys:Pollinations"] ?? "";
+
+        var freeApiService = new FreeApiService(geminiKey, hfKey, pollinationsKey);
+
         services.AddSingleton<ILLMService>(freeApiService);
         services.AddSingleton<IImageGenerationService>(freeApiService);
-        services.AddSingleton<ITtsService, GoogleTtsService>();
+        services.AddSingleton<ITtsService>(new GoogleTtsService(ffmpegPath));
         services.AddSingleton<IVideoService>(new FFmpegVideoService(ffmpegPath));
         services.AddSingleton<IDatabaseService>(new SqliteDatabaseService(connStr));
         

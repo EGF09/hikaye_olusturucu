@@ -266,7 +266,16 @@ public partial class Form1 : Form
             _currentStory = new Story { Prompt = txtPrompt.Text.Trim() };
 
             Log("Hikaye LLM ile oluşturuluyor...");
-            _currentStory.Content = await _llmService.GenerateStoryAsync(_currentStory.Prompt);
+            string generatedContent = await _llmService.GenerateStoryAsync(_currentStory.Prompt);
+
+            if (generatedContent.StartsWith("[YEDEK API KULLANILDI]"))
+            {
+                generatedContent = generatedContent.Replace("[YEDEK API KULLANILDI]", "").Trim();
+                MessageBox.Show("Ana servis (Pollinations) şu anda yoğun olduğu için hikaye alternatif bir ücretsiz servis (Yedek API) kullanılarak oluşturuldu.", "Servis Yoğunluğu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Log("Ana servis yoğun. Yedek API kullanıldı.");
+            }
+
+            _currentStory.Content = generatedContent;
 
             if (string.IsNullOrEmpty(_currentStory.Content))
                 throw new Exception("LLM boş içerik döndürdü.");
@@ -278,6 +287,12 @@ public partial class Form1 : Form
 
             Log("Görseller yapay zeka ile üretiliyor...");
             _currentStory.ImagePaths = await _imageService.GenerateImagesAsync(_currentStory.Content, 3);       
+
+            if (_currentStory.ImagePaths.Any(p => Path.GetFileName(p).StartsWith("fallback_image")))
+            {
+                MessageBox.Show("Görsel servisi şu anda yoğun olduğu için hikayeye yer tutucu (fallback) görseller eklendi. Video oluşturma işlemine sorunsuz devam edebilirsiniz.", "Servis Yoğunluğu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Log("Görsel servisi yoğun. Yer tutucu görseller kullanıldı.");
+            }
 
             flowLayoutPanelImages.Controls.Clear();
             foreach (var path in _currentStory.ImagePaths)
