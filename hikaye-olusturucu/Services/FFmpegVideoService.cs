@@ -61,10 +61,11 @@ public class FFmpegVideoService : IVideoService
 
             // zoompan filtresi, tek bir kareyi d={framesPerImage} kadar çoğaltarak video oluşturur.
             // s=1024x1024 çıkış boyutu, fps=25 ise kare hızıdır.
-            // x ve y değerleri merkeze odaklanmayı sağlar.
+            // x ve y değerleri merkeze odaklanmayı sağlar. Titremeyi (jitter) önlemek için yüksek çözünürlükte işleyip
+            // koordinatları en yakın çift sayıya (trunc) yuvarlıyoruz ve ardından nihai boyuta ölçekliyoruz.
             string zoomEff = (i % 2 == 0) ? "zoom+0.0006" : "1.1-0.0006*on";
 
-            sbFilters.Append($"[{i}:v]scale=2048:2048,zoompan=z='{zoomEff}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={framesPerImage}:s=1024x1024:fps={fps},format=yuv420p[v{i}]; ");
+            sbFilters.Append($"[{i}:v]scale=4096:4096,zoompan=z='{zoomEff}':x='trunc((iw-iw/zoom)/4)*2':y='trunc((ih-ih/zoom)/4)*2':d={framesPerImage}:s=2048x2048:fps={fps},scale=1024:1024,format=yuv420p[v{i}]; ");
         }
 
         // Xfade geçişleri ile birleştirme
