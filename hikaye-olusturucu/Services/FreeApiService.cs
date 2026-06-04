@@ -265,8 +265,6 @@ public class FreeApiService : ILLMService, IImageGenerationService
         }
 
         // 2. Görselleri üret
-        string hfUrl = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell";
-
         for (int i = 0; i < count; i++)
         {
             try
@@ -275,82 +273,86 @@ public class FreeApiService : ILLMService, IImageGenerationService
                 byte[] imageBytes = null;
                 bool isAiGenerated = false;
 
-                // 1. Pollinations AI'ı dene (Anahtarlı)
+                // 1. Pollinations AI (Anahtarlı - Flux)
                 bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
                 if (hasPollinationsKey)
                 {
                     try
                     {
-                        string pollinationsUrl = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}&key={Uri.EscapeDataString(_pollinationsApiKey)}";
-                        imageBytes = await _httpClient.GetByteArrayAsync(pollinationsUrl);
-                        if (imageBytes != null && imageBytes.Length > 1000)
-                        {
-                            isAiGenerated = true;
-                        }
+                        imageBytes = await CallPollinationsImageApi(currentPrompt, "flux", _pollinationsApiKey);
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                     }
-                    catch
-                    {
-                        imageBytes = null;
-                    }
+                    catch { imageBytes = null; }
                 }
 
-                // 2. Pollinations AI'ı dene (Anahtarsız - Keyless)
+                // 2. Pollinations AI (Anahtarsız - Flux)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
                     try
                     {
-                        using (var cleanClient = new HttpClient())
-                        {
-                            cleanClient.Timeout = TimeSpan.FromSeconds(25);
-                            string seed = Guid.NewGuid().GetHashCode().ToString();
-                            string pollinationsUrl = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={seed}";
-                            imageBytes = await cleanClient.GetByteArrayAsync(pollinationsUrl);
-                            if (imageBytes != null && imageBytes.Length > 1000)
-                            {
-                                isAiGenerated = true;
-                            }
-                        }
+                        imageBytes = await CallPollinationsImageApi(currentPrompt, "flux");
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                     }
-                    catch
-                    {
-                        imageBytes = null;
-                    }
+                    catch { imageBytes = null; }
                 }
 
-                // 3. Hugging Face'i dene (Anahtarlı)
+                // 3. Pollinations AI (Anahtarsız - Turbo)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
-                    bool hasHF = !string.IsNullOrWhiteSpace(_huggingFaceApiKey) && 
-                                  !_huggingFaceApiKey.Contains("YOUR_HF_API_KEY");
-                    if (hasHF)
+                    try
                     {
-                        try
-                        {
-                            var requestBody = new { inputs = currentPrompt };
-                            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                            
-                            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, hfUrl);
-                            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _huggingFaceApiKey);
-                            requestMessage.Content = content;
-
-                            var response = await _httpClient.SendAsync(requestMessage);
-                            if (response.IsSuccessStatusCode)
-                            {
-                                imageBytes = await response.Content.ReadAsByteArrayAsync();
-                                if (imageBytes != null && imageBytes.Length > 1000)
-                                {
-                                    isAiGenerated = true;
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            imageBytes = null;
-                        }
+                        imageBytes = await CallPollinationsImageApi(currentPrompt, "turbo");
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                     }
+                    catch { imageBytes = null; }
                 }
 
-                // 4. Rate limit koruması: Sadece AI servisleri başarıyla çalıştığında kısa bir bekleme (3sn) ekleyelim
+                // 4. Pollinations AI (Anahtarsız - Anime)
+                if (imageBytes == null || imageBytes.Length <= 1000)
+                {
+                    try
+                    {
+                        imageBytes = await CallPollinationsImageApi(currentPrompt, "anime");
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
+                    }
+                    catch { imageBytes = null; }
+                }
+
+                // 5. Hugging Face (Anahtarlı - Flux Schnell)
+                bool hasHF = !string.IsNullOrWhiteSpace(_huggingFaceApiKey) && !_huggingFaceApiKey.Contains("YOUR_HF_API_KEY");
+                if (hasHF && (imageBytes == null || imageBytes.Length <= 1000))
+                {
+                    try
+                    {
+                        imageBytes = await CallHuggingFaceImageApi(currentPrompt, "black-forest-labs/FLUX.1-schnell");
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
+                    }
+                    catch { imageBytes = null; }
+                }
+
+                // 6. Hugging Face (Anahtarlı - SDXL)
+                if (hasHF && (imageBytes == null || imageBytes.Length <= 1000))
+                {
+                    try
+                    {
+                        imageBytes = await CallHuggingFaceImageApi(currentPrompt, "stabilityai/stable-diffusion-xl-base-1.0");
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
+                    }
+                    catch { imageBytes = null; }
+                }
+
+                // 7. Hugging Face (Anahtarlı - SD 1.5)
+                if (hasHF && (imageBytes == null || imageBytes.Length <= 1000))
+                {
+                    try
+                    {
+                        imageBytes = await CallHuggingFaceImageApi(currentPrompt, "runwayml/stable-diffusion-v1-5");
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
+                    }
+                    catch { imageBytes = null; }
+                }
+
+                // Kaydetme ve Gecikme
                 if (imageBytes != null && imageBytes.Length > 1000)
                 {
                     string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
@@ -434,5 +436,43 @@ public class FreeApiService : ILLMService, IImageGenerationService
         }
 
         return imagePaths;
+    }
+
+    private async Task<byte[]> CallPollinationsImageApi(string prompt, string model, string apiKey = "")
+    {
+        string seed = Guid.NewGuid().GetHashCode().ToString();
+        string url;
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            url = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(prompt)}?width=1024&height=1024&nologo=true&seed={seed}&model={model}&key={Uri.EscapeDataString(apiKey)}";
+        }
+        else
+        {
+            url = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(prompt)}?width=1024&height=1024&nologo=true&seed={seed}&model={model}";
+        }
+
+        using (var cleanClient = new HttpClient())
+        {
+            cleanClient.Timeout = TimeSpan.FromSeconds(25);
+            return await cleanClient.GetByteArrayAsync(url);
+        }
+    }
+
+    private async Task<byte[]> CallHuggingFaceImageApi(string prompt, string model)
+    {
+        string url = $"https://api-inference.huggingface.co/models/{model}";
+        var requestBody = new { inputs = prompt };
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+        
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, url);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _huggingFaceApiKey);
+        requestMessage.Content = content;
+
+        var response = await _httpClient.SendAsync(requestMessage);
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+        return null;
     }
 }
