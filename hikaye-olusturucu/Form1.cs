@@ -124,7 +124,8 @@ public partial class Form1 : Form
 
         btnGenerateStory.Text = "Hikaye Oluştur";
         btnGenerateVideo.Text = "Video Oluştur";
-        btnToggleLog.Text = "▼ Loglar";
+        txtLog.Visible = false;
+        btnToggleLog.Text = "▶ Loglar";
 
         tabControlMedia.DrawMode = TabDrawMode.OwnerDrawFixed;
         tabControlMedia.SizeMode = TabSizeMode.Fixed;
@@ -668,5 +669,20 @@ public partial class Form1 : Form
                 MessageBox.Show("Video başarıyla kaydedildi.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
+    }
+}
+
+public class BorderlessTabControl : TabControl
+{
+    private const int TCM_ADJUSTRECT = 0x1328;
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == TCM_ADJUSTRECT && !DesignMode)
+        {
+            m.Result = (IntPtr)1;
+            return;
+        }
+        base.WndProc(ref m);
     }
 }

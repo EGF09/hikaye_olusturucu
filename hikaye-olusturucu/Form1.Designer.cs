@@ -13,7 +13,7 @@ namespace hikaye_olusturucu
         private System.Windows.Forms.Button btnToggleLog;
         private System.Windows.Forms.TextBox txtLog;
         private System.Windows.Forms.Label lblPrompt;
-        private System.Windows.Forms.TabControl tabControlMedia;
+        private BorderlessTabControl tabControlMedia;
         private System.Windows.Forms.TabPage tabPageImages;
         private System.Windows.Forms.TabPage tabPageVideo;
         private Microsoft.Web.WebView2.WinForms.WebView2 webViewVideo;
@@ -39,7 +39,7 @@ namespace hikaye_olusturucu
             this.btnToggleLog = new System.Windows.Forms.Button();
             this.txtLog = new System.Windows.Forms.TextBox();
             this.lblPrompt = new System.Windows.Forms.Label();
-            this.tabControlMedia = new System.Windows.Forms.TabControl();
+            this.tabControlMedia = new BorderlessTabControl();
             this.tabPageImages = new System.Windows.Forms.TabPage();
             this.tabPageVideo = new System.Windows.Forms.TabPage();
             this.webViewVideo = new Microsoft.Web.WebView2.WinForms.WebView2();
@@ -105,7 +105,7 @@ namespace hikaye_olusturucu
             this.txtStoryContent.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.txtStoryContent.Size = new System.Drawing.Size(380, 200);
             this.txtStoryContent.TabIndex = 2;
-            this.txtStoryContent.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right));
+            this.txtStoryContent.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // btnSpeak
@@ -206,7 +206,7 @@ namespace hikaye_olusturucu
             this.btnToggleLog.Text = "\u25BC Loglar";
             this.btnToggleLog.UseVisualStyleBackColor = true;
             this.btnToggleLog.Click += new System.EventHandler(this.btnToggleLog_Click);
-            this.btnToggleLog.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnToggleLog.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // txtLog
@@ -218,7 +218,7 @@ namespace hikaye_olusturucu
             this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.txtLog.Size = new System.Drawing.Size(380, 151);
             this.txtLog.TabIndex = 5;
-            this.txtLog.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
+            this.txtLog.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
 
             // 
             // Form1
