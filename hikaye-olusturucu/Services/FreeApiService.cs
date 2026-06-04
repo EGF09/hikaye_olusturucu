@@ -269,7 +269,12 @@ public class FreeApiService : ILLMService, IImageGenerationService
         {
             try
             {
-                string currentPrompt = i < prompts.Count ? prompts[i] : $"Cinematic, highly detailed digital art, scene {i + 1} of: {storyContent.Substring(0, Math.Min(storyContent.Length, 100))}";
+                string currentPrompt = i < prompts.Count ? prompts[i] : $"Cinematic digital art of: {storyContent.Substring(0, Math.Min(storyContent.Length, 100))}";
+                if (currentPrompt.Length > 350)
+                {
+                    currentPrompt = currentPrompt.Substring(0, 350);
+                }
+
                 byte[] imageBytes = null;
                 bool isAiGenerated = false;
 
@@ -277,79 +282,51 @@ public class FreeApiService : ILLMService, IImageGenerationService
                 bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
                 if (hasPollinationsKey)
                 {
-                    try
-                    {
-                        imageBytes = await CallPollinationsImageApi(currentPrompt, "flux", _pollinationsApiKey);
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallPollinationsWithRetry(currentPrompt, "flux", _pollinationsApiKey);
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // 2. Pollinations AI (Anahtarsız - Flux)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
-                    try
-                    {
-                        imageBytes = await CallPollinationsImageApi(currentPrompt, "flux");
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallPollinationsWithRetry(currentPrompt, "flux");
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // 3. Pollinations AI (Anahtarsız - Turbo)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
-                    try
-                    {
-                        imageBytes = await CallPollinationsImageApi(currentPrompt, "turbo");
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallPollinationsWithRetry(currentPrompt, "turbo");
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // 4. Pollinations AI (Anahtarsız - Anime)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
-                    try
-                    {
-                        imageBytes = await CallPollinationsImageApi(currentPrompt, "anime");
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallPollinationsWithRetry(currentPrompt, "anime");
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // 5. Hugging Face (Anahtarlı - Flux Schnell)
                 bool hasHF = !string.IsNullOrWhiteSpace(_huggingFaceApiKey) && !_huggingFaceApiKey.Contains("YOUR_HF_API_KEY");
                 if (hasHF && (imageBytes == null || imageBytes.Length <= 1000))
                 {
-                    try
-                    {
-                        imageBytes = await CallHuggingFaceImageApi(currentPrompt, "black-forest-labs/FLUX.1-schnell");
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallHuggingFaceWithRetry(currentPrompt, "black-forest-labs/FLUX.1-schnell");
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // 6. Hugging Face (Anahtarlı - SDXL)
                 if (hasHF && (imageBytes == null || imageBytes.Length <= 1000))
                 {
-                    try
-                    {
-                        imageBytes = await CallHuggingFaceImageApi(currentPrompt, "stabilityai/stable-diffusion-xl-base-1.0");
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallHuggingFaceWithRetry(currentPrompt, "stabilityai/stable-diffusion-xl-base-1.0");
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // 7. Hugging Face (Anahtarlı - SD 1.5)
                 if (hasHF && (imageBytes == null || imageBytes.Length <= 1000))
                 {
-                    try
-                    {
-                        imageBytes = await CallHuggingFaceImageApi(currentPrompt, "runwayml/stable-diffusion-v1-5");
-                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
-                    }
-                    catch { imageBytes = null; }
+                    imageBytes = await CallHuggingFaceWithRetry(currentPrompt, "runwayml/stable-diffusion-v1-5");
+                    if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
                 }
 
                 // Kaydetme ve Gecikme
@@ -359,9 +336,10 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     await File.WriteAllBytesAsync(filePath, imageBytes);
                     imagePaths.Add(filePath);
 
+                    // Sıralı isteklerde IP bazlı eşzamanlılık kuyruğunun dolmaması için 10 saniye bekle
                     if (isAiGenerated && i < count - 1)
                     {
-                        await Task.Delay(3000);
+                        await Task.Delay(10000);
                     }
                 }
             }
@@ -436,6 +414,56 @@ public class FreeApiService : ILLMService, IImageGenerationService
         }
 
         return imagePaths;
+    }
+
+    private async Task<byte[]> CallPollinationsWithRetry(string prompt, string model, string apiKey = "")
+    {
+        int maxRetries = 2;
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                var bytes = await CallPollinationsImageApi(prompt, model, apiKey);
+                if (bytes != null && bytes.Length > 1000)
+                {
+                    return bytes;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Pollinations retry {attempt} failed: {ex.Message}");
+            }
+            if (attempt < maxRetries - 1)
+            {
+                await Task.Delay(4000);
+            }
+        }
+        return null;
+    }
+
+    private async Task<byte[]> CallHuggingFaceWithRetry(string prompt, string model)
+    {
+        int maxRetries = 2;
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                var bytes = await CallHuggingFaceImageApi(prompt, model);
+                if (bytes != null && bytes.Length > 1000)
+                {
+                    return bytes;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Hugging Face retry {attempt} failed: {ex.Message}");
+            }
+            if (attempt < maxRetries - 1)
+            {
+                await Task.Delay(4000);
+            }
+        }
+        return null;
     }
 
     private async Task<byte[]> CallPollinationsImageApi(string prompt, string model, string apiKey = "")
