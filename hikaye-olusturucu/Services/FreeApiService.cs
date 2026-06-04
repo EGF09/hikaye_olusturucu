@@ -86,6 +86,53 @@ public class FreeApiService : ILLMService, IImageGenerationService
             }
         }
 
+        // 3. Paragraf sayısını tam olarak 3'e eşitle (Giriş, Gelişme, Sonuç)
+        if (processedParagraphs.Count == 2)
+        {
+            // 2 paragraf varsa, daha uzun olanını cümle sınırından ikiye böl
+            int indexToSplit = processedParagraphs[0].Length >= processedParagraphs[1].Length ? 0 : 1;
+            string targetPara = processedParagraphs[indexToSplit];
+            var sentences = Regex.Split(targetPara, @"(?<=[.!?])\s+");
+            if (sentences.Length > 1)
+            {
+                int splitPoint = (int)Math.Ceiling(sentences.Length / 2.0);
+                string part1 = string.Join(" ", sentences.Take(splitPoint));
+                string part2 = string.Join(" ", sentences.Skip(splitPoint));
+                
+                processedParagraphs.RemoveAt(indexToSplit);
+                processedParagraphs.Insert(indexToSplit, part1);
+                processedParagraphs.Insert(indexToSplit + 1, part2);
+            }
+        }
+        else if (processedParagraphs.Count > 3)
+        {
+            // 3'ten fazla paragraf varsa, 3 paragraf kalana kadar son paragrafları birleştir
+            while (processedParagraphs.Count > 3)
+            {
+                string merged = processedParagraphs[processedParagraphs.Count - 2] + " " + processedParagraphs[processedParagraphs.Count - 1];
+                processedParagraphs.RemoveAt(processedParagraphs.Count - 1);
+                processedParagraphs[processedParagraphs.Count - 1] = merged;
+            }
+        }
+        else if (processedParagraphs.Count == 1)
+        {
+            // Tek bir devasa paragraf varsa, bunu cümle sınırlarından 3'e böl
+            string targetPara = processedParagraphs[0];
+            var sentences = Regex.Split(targetPara, @"(?<=[.!?])\s+");
+            if (sentences.Length >= 3)
+            {
+                int size = (int)Math.Ceiling(sentences.Length / 3.0);
+                string part1 = string.Join(" ", sentences.Take(size));
+                string part2 = string.Join(" ", sentences.Skip(size).Take(size));
+                string part3 = string.Join(" ", sentences.Skip(size * 2));
+                
+                processedParagraphs.Clear();
+                processedParagraphs.Add(part1);
+                processedParagraphs.Add(part2);
+                processedParagraphs.Add(part3);
+            }
+        }
+
         // Paragrafları çift satır boşluğuyla birleştir
         return string.Join("\r\n\r\n", processedParagraphs);
     }
