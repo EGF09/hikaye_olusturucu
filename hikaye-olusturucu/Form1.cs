@@ -295,7 +295,30 @@ public partial class Form1 : Form
                 Log("Görsel servisi yoğun. Yer tutucu görseller kullanıldı.");
             }
 
+            // 1. Eski kontrol ve görselleri temizleyerek dosya kilitlerini ve belleği serbest bırakalım
+            flowLayoutPanelImages.SuspendLayout();
+            foreach (Control ctrl in flowLayoutPanelImages.Controls)
+            {
+                if (ctrl is Panel panelCtrl)
+                {
+                    foreach (Control innerCtrl in panelCtrl.Controls)
+                    {
+                        if (innerCtrl is PictureBox pbCtrl)
+                        {
+                            if (pbCtrl.Image != null)
+                            {
+                                var img = pbCtrl.Image;
+                                pbCtrl.Image = null;
+                                img.Dispose();
+                            }
+                        }
+                    }
+                }
+                ctrl.Dispose();
+            }
             flowLayoutPanelImages.Controls.Clear();
+
+            // 2. Yeni görselleri yükleyelim
             foreach (var path in _currentStory.ImagePaths)
             {
                 if (File.Exists(path))
@@ -307,9 +330,23 @@ public partial class Form1 : Form
                         Margin = new Padding(5)
                     };
 
+                    // Dosya kilidi oluşturmamak için görseli hafızaya kopyalayarak yükleyelim
+                    Image imgCopy = null;
+                    try
+                    {
+                        using (var tempImg = Image.FromFile(path))
+                        {
+                            imgCopy = new Bitmap(tempImg);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Görsel yükleme hatası ({Path.GetFileName(path)}): {ex.Message}");
+                    }
+
                     var pb = new PictureBox
                     {
-                        Image = Image.FromFile(path),
+                        Image = imgCopy,
                         SizeMode = PictureBoxSizeMode.Zoom,
                         Dock = DockStyle.Fill
                     };
@@ -351,6 +388,7 @@ public partial class Form1 : Form
                     flowLayoutPanelImages.Controls.Add(panel);
                 }
             }
+            flowLayoutPanelImages.ResumeLayout(true);
 
             tabControlMedia.SelectedTab = tabPageImages;
 
