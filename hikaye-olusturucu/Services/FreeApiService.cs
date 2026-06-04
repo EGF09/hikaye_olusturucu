@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Drawing;
 using hikaye_olusturucu.Core.Interfaces;
@@ -32,10 +33,61 @@ public class FreeApiService : ILLMService, IImageGenerationService
 
     public async Task<string> GenerateStoryAsync(string prompt)
     {
-        string systemPrompt = "Sen yaratıcı ve profesyonel bir Türkçe yazarısın. Hikaye tam olarak 3 paragraftan oluşmalıdır: 1. paragraf Giriş, 2. paragraf Gelişme, ve 3. paragraf Sonuç bölümünü temsil etmelidir. Her paragraf arasında boş satır bırakılmalı, ekstra açıklama, yorum veya başlık eklenmemelidir.";
+        string systemPrompt = "Sen yaratıcı ve profesyonel bir Türkçe yazarısın. Hikaye tam olarak 3 paragraftan oluşmalıdır (Giriş, Gelişme, Sonuç). " +
+                             "HİÇBİR ŞEKİLDE \"Giriş:\", \"Gelişme:\", \"Sonuç:\" veya \"1. Paragraf:\", \"Başlangıç:\" gibi bölüm başlıkları, etiketler veya numaralandırmalar ekleme. " +
+                             "Sadece doğrudan hikayenin paragraflarını yaz. Paragraflar arasında tam olarak birer boş satır bırak. " +
+                             "Hikaye tamamen Türkçe olmalı ve çince, japonca gibi yabancı/Asya dillerinden hiçbir karakter veya kelime içermemelidir.";
         string fullPrompt = $"{systemPrompt}\n\nKonu: {prompt}";
 
-        return await GenerateTextContentAsync(fullPrompt);
+        string rawStory = await GenerateTextContentAsync(fullPrompt);
+        return CleanStoryText(rawStory);
+    }
+
+    private string CleanStoryText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+        // 1. Çince, Japonca, Korece karakterleri ve sembolleri temizle (Hiragana, Katakana, Kanji, Hangul vb.)
+        text = Regex.Replace(text, @"[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af]", "");
+
+        // 2. Paragrafları satır bazlı ayırıp başlıkları temizle
+        var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        var processedParagraphs = new List<string>();
+
+        foreach (var line in lines)
+        {
+            string trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+
+            // Bölüm başlıklarını ve etiketleri temizle: Örn: **Giriş:**, Giriş - , 1. Gelişme: vb.
+            string cleanLine = Regex.Replace(
+                trimmed, 
+                @"^(?i)[\s\*\_\-\#]*([0-9]+[\.\-\s]*)?(giriş|gelişme|sonuç|paragraf|bölüm|sahne|adım|step|intro|body|conclusion|giris|gelisme|sonuc)\s*([0-9]+)?\s*(:\s*|--?\s*|\.\s*|\*\*\s*|\s*$)", 
+                ""
+            );
+
+            // Yalnızca sayısal listeleri temizle: Örn: 1., 2., 1- vb.
+            cleanLine = Regex.Replace(
+                cleanLine, 
+                @"^(?i)[\s\*\_\-\#]*[0-9]+[\.\-\s]*(:\s*|--?\s*|\.\s*|\s*$)", 
+                ""
+            );
+
+            // Kenarlardaki artık markdown işaretlerini veya noktalama işaretlerini temizle
+            // Sol taraftan nokta ve diğer semboller silinebilir, ancak sağ taraftan (cümle sonundan) nokta silinmemelidir.
+            cleanLine = Regex.Replace(cleanLine, @"^[\*_#\s\-:\.]+", "");
+            cleanLine = Regex.Replace(cleanLine, @"[\*_#\s\-:]+$", "");
+
+            if (!string.IsNullOrWhiteSpace(cleanLine))
+            {
+                // Birden fazla boşluğu teke indirge
+                cleanLine = Regex.Replace(cleanLine, @"\s+", " ");
+                processedParagraphs.Add(cleanLine);
+            }
+        }
+
+        // Paragrafları çift satır boşluğuyla birleştir
+        return string.Join("\r\n\r\n", processedParagraphs);
     }
 
     public async Task<string> GenerateTitleAsync(string storyContent)
