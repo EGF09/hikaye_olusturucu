@@ -245,16 +245,24 @@ public class FreeApiService : ILLMService, IImageGenerationService
     public async Task<List<string>> GenerateImagesAsync(string storyContent, int count = 3)
     {
         var imagePaths = new List<string>();
+        List<string> prompts = new List<string>();
         
         // 1. Promptları üret
-        string promptGenRequest = $"Aşağıdaki hikaye için görsel oluşturmaya uygun, detaylı ve İngilizce {count} adet prompt hazırla. Her biri hikayenin farklı bir bölümünü temsil etsin. Sadece promptları döndür, numara veya açıklama ekleme. Her prompt yeni satırda olsun.\n\nHikaye: {storyContent}";
-        string rawPrompts = await GenerateTextContentAsync(promptGenRequest);
-        
-        var prompts = rawPrompts.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                               .Select(p => p.Trim().Trim('1', '2', '3', '.', '-', '*', ' ', '"'))
-                               .Where(p => !string.IsNullOrWhiteSpace(p))
-                               .Take(count)
-                               .ToList();
+        try
+        {
+            string promptGenRequest = $"Aşağıdaki hikaye için görsel oluşturmaya uygun, detaylı ve İngilizce {count} adet prompt hazırla. Her biri hikayenin farklı bir bölümünü temsil etsin. Sadece promptları döndür, numara veya açıklama ekleme. Her prompt yeni satırda olsun.\n\nHikaye: {storyContent}";
+            string rawPrompts = await GenerateTextContentAsync(promptGenRequest);
+            
+            prompts = rawPrompts.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                                   .Select(p => p.Trim().Trim('1', '2', '3', '.', '-', '*', ' ', '"'))
+                                   .Where(p => !string.IsNullOrWhiteSpace(p))
+                                   .Take(count)
+                                   .ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Prompt üretimi hatası: {ex.Message}");
+        }
 
         // 2. Görselleri üret
         string hfUrl = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell";
@@ -265,8 +273,9 @@ public class FreeApiService : ILLMService, IImageGenerationService
             {
                 string currentPrompt = i < prompts.Count ? prompts[i] : $"Cinematic, highly detailed digital art, scene {i + 1} of: {storyContent.Substring(0, Math.Min(storyContent.Length, 100))}";
                 byte[] imageBytes = null;
+                bool isAiGenerated = false;
 
-                // 1. Pollinations AI'ı dene (Öncelikli Servis - önce anahtarlı, sonra anahtarsız)
+                // 1. Pollinations AI'ı dene (Anahtarlı)
                 bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
                 if (hasPollinationsKey)
                 {
@@ -274,6 +283,10 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     {
                         string pollinationsUrl = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}&key={Uri.EscapeDataString(_pollinationsApiKey)}";
                         imageBytes = await _httpClient.GetByteArrayAsync(pollinationsUrl);
+                        if (imageBytes != null && imageBytes.Length > 1000)
+                        {
+                            isAiGenerated = true;
+                        }
                     }
                     catch
                     {
@@ -281,12 +294,22 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     }
                 }
 
+                // 2. Pollinations AI'ı dene (Anahtarsız - Keyless)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
                     try
                     {
-                        string pollinationsUrl = $"https://gen.pollinations.ai/image/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={Guid.NewGuid().GetHashCode()}";
-                        imageBytes = await _httpClient.GetByteArrayAsync(pollinationsUrl);
+                        using (var cleanClient = new HttpClient())
+                        {
+                            cleanClient.Timeout = TimeSpan.FromSeconds(25);
+                            string seed = Guid.NewGuid().GetHashCode().ToString();
+                            string pollinationsUrl = $"https://image.pollinations.ai/prompt/{Uri.EscapeDataString(currentPrompt)}?width=1024&height=1024&nologo=true&seed={seed}";
+                            imageBytes = await cleanClient.GetByteArrayAsync(pollinationsUrl);
+                            if (imageBytes != null && imageBytes.Length > 1000)
+                            {
+                                isAiGenerated = true;
+                            }
+                        }
                     }
                     catch
                     {
@@ -294,7 +317,7 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     }
                 }
 
-                // 2. Yedek Servis: Hugging Face'i dene (Pollinations başarısızsa)
+                // 3. Hugging Face'i dene (Anahtarlı)
                 if (imageBytes == null || imageBytes.Length <= 1000)
                 {
                     bool hasHF = !string.IsNullOrWhiteSpace(_huggingFaceApiKey) && 
@@ -314,6 +337,10 @@ public class FreeApiService : ILLMService, IImageGenerationService
                             if (response.IsSuccessStatusCode)
                             {
                                 imageBytes = await response.Content.ReadAsByteArrayAsync();
+                                if (imageBytes != null && imageBytes.Length > 1000)
+                                {
+                                    isAiGenerated = true;
+                                }
                             }
                         }
                         catch
@@ -323,26 +350,93 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     }
                 }
 
+                // 4. LoremFlickr'ı dene (Ücretsiz ve Anahtarsız Tag Bazlı Doğa/Konu Görseli)
+                if (imageBytes == null || imageBytes.Length <= 1000)
+                {
+                    try
+                    {
+                        string tags = "nature";
+                        if (!string.IsNullOrWhiteSpace(currentPrompt))
+                        {
+                            var words = currentPrompt.Split(' ')
+                                .Select(w => new string(w.Where(char.IsLetterOrDigit).ToArray()).ToLower())
+                                .Where(w => w.Length > 3 && w != "with" && w != "that" && w != "this" && w != "from" && w != "cute" && w != "high" && w != "detail" && w != "scene")
+                                .Take(3)
+                                .ToList();
+                            if (words.Count > 0)
+                            {
+                                tags = string.Join(",", words);
+                            }
+                        }
+                        string flickrUrl = $"https://loremflickr.com/1024/1024/{Uri.EscapeDataString(tags)}";
+                        using (var cleanClient = new HttpClient())
+                        {
+                            cleanClient.Timeout = TimeSpan.FromSeconds(20);
+                            imageBytes = await cleanClient.GetByteArrayAsync(flickrUrl);
+                        }
+                    }
+                    catch
+                    {
+                        imageBytes = null;
+                    }
+                }
+
+                // 5. Picsum Photos'u dene (Ücretsiz ve Anahtarsız Rastgele Doğa/Sanat Görseli)
+                if (imageBytes == null || imageBytes.Length <= 1000)
+                {
+                    try
+                    {
+                        string picsumUrl = "https://picsum.photos/1024/1024";
+                        using (var cleanClient = new HttpClient())
+                        {
+                            cleanClient.Timeout = TimeSpan.FromSeconds(20);
+                            imageBytes = await cleanClient.GetByteArrayAsync(picsumUrl);
+                        }
+                    }
+                    catch
+                    {
+                        imageBytes = null;
+                    }
+                }
+
+                // 6. LoremFlickr Random (Ücretsiz ve Anahtarsız Tamamen Rastgele Görsel)
+                if (imageBytes == null || imageBytes.Length <= 1000)
+                {
+                    try
+                    {
+                        string flickrRandomUrl = "https://loremflickr.com/1024/1024";
+                        using (var cleanClient = new HttpClient())
+                        {
+                            cleanClient.Timeout = TimeSpan.FromSeconds(20);
+                            imageBytes = await cleanClient.GetByteArrayAsync(flickrRandomUrl);
+                        }
+                    }
+                    catch
+                    {
+                        imageBytes = null;
+                    }
+                }
+
                 if (imageBytes != null && imageBytes.Length > 1000)
                 {
                     string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
                     await File.WriteAllBytesAsync(filePath, imageBytes);
                     imagePaths.Add(filePath);
-                }
 
-                // Görseller arası hız limitine (Rate Limit) takılmamak için 60 saniye bekleme süresi ekleyelim
-                if (i < count - 1)
-                {
-                    await Task.Delay(60000);
+                    // Rate limit koruması: Sadece AI servisleri başarıyla çalıştığında kısa bir bekleme (3sn) ekleyelim
+                    if (isAiGenerated && i < count - 1)
+                    {
+                        await Task.Delay(3000);
+                    }
                 }
             }
-            catch 
+            catch (Exception ex)
             {
-                // Tüm denemeler başarısızsa yer tutucu üreteceğiz
+                System.Diagnostics.Debug.WriteLine($"Döngü içi görsel oluşturma hatası: {ex.Message}");
             }
         }
 
-        // 3. Fallback: Sistem yoğunsa boş yer tutucu (placeholder) oluştur.
+        // 3. Fallback: Tüm servisler (AI ve stock) başarısız olduysa boş yer tutucu (placeholder) oluştur.
         while (imagePaths.Count < count)
         {
             int i = imagePaths.Count;
