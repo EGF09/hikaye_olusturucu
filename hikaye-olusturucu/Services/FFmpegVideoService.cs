@@ -38,14 +38,36 @@ public class FFmpegVideoService : IVideoService
 
         double totalAudioDuration = GetAudioDuration(audioPath);
         double transitionDuration = 0.5; // Geçiş süresi (saniye)
-
-        // Video süresinin ses süresine eşit olması için her görselin süresini ayarlıyoruz
-        // n*L - (n-1)*O = totalDuration => L = (totalDuration + (n-1)*O) / n
-        double durationPerImage = (totalAudioDuration + (imagePaths.Count - 1) * transitionDuration) / imagePaths.Count;
-        
         int fps = 25;
-        // zoompan için tam kare sayısı
-        int framesPerImage = (int)Math.Round(durationPerImage * fps);
+
+        // Giriş, Gelişme, Sonuç paragraflarını ayır
+        var paragraphs = storyContent.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(p => p.Trim())
+                                      .ToList();
+
+        // Her paragrafın karakter uzunluğuna göre görsel sürelerini orantılı dağıt
+        double[] durations = new double[imagePaths.Count];
+        if (imagePaths.Count == paragraphs.Count)
+        {
+            int totalChars = paragraphs.Sum(p => p.Length);
+            if (totalChars > 0)
+            {
+                for (int i = 0; i < imagePaths.Count; i++)
+                {
+                    durations[i] = (paragraphs[i].Length / (double)totalChars) * totalAudioDuration;
+                }
+            }
+            else
+            {
+                double equalDuration = totalAudioDuration / imagePaths.Count;
+                for (int i = 0; i < imagePaths.Count; i++) durations[i] = equalDuration;
+            }
+        }
+        else
+        {
+            double equalDuration = totalAudioDuration / imagePaths.Count;
+            for (int i = 0; i < imagePaths.Count; i++) durations[i] = equalDuration;
+        }
 
         string outputPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"video_{Guid.NewGuid()}.mp4"); 
         string vttPath = Path.ChangeExtension(outputPath, ".vtt");
@@ -56,18 +78,16 @@ public class FFmpegVideoService : IVideoService
 
         for (int i = 0; i < imagePaths.Count; i++)
         {
-            // ÖNEMLİ: -loop 1 KULLANMIYORUZ. Her resmi tek bir kare olarak alıyoruz.
             sbInputs.Append($"-i \"{imagePaths[i]}\" ");
 
-            // zoompan filtresi, tek bir kareyi d={framesPerImage} kadar çoğaltarak video oluşturur.
-            // Titremeyi (jitter) tamamen önlemek için görseli devasa bir 8K (8192x8192) çözünürlüğe ölçekleyip
-            // koordinat yuvarlama hatalarını mikro düzeye indirgiyoruz. Daha sonra pürüzsüz zoom sonrası nihai boyuta (1024x1024) ölçekliyoruz.
+            // Her görselin kendi süresine göre kare sayısını (d) hesapla
+            int framesPerImage = (int)Math.Round(durations[i] * fps);
             string zoomEff = (i % 2 == 0) ? "1.0+0.0006*on" : "1.1-0.0006*on";
 
             sbFilters.Append($"[{i}:v]scale=8192:8192,zoompan=z='{zoomEff}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={framesPerImage}:s=2048x2048:fps={fps},scale=1024:1024,format=yuv420p[v{i}]; ");
         }
 
-        // Xfade geçişleri ile birleştirme
+        // Xfade geçişleri ile birleştirme (Farklı süreler için dinamik offsetler)
         if (imagePaths.Count > 1)
         {
             string lastStream = "[v0]";
@@ -75,7 +95,14 @@ public class FFmpegVideoService : IVideoService
             {
                 string nextStream = $"[v{i}]";
                 string outStream = (i == imagePaths.Count - 1) ? "[vmerged]" : $"[vm{i}]";
-                double offset = i * (durationPerImage - transitionDuration);
+                
+                // Kümülatif süreye göre xfade geçiş zamanını hesapla
+                double cumulativeDuration = 0;
+                for (int j = 0; j < i; j++)
+                {
+                    cumulativeDuration += durations[j];
+                }
+                double offset = cumulativeDuration - i * transitionDuration;
                 
                 sbFilters.Append($"{lastStream}{nextStream}xfade=transition=fade:duration={transitionDuration.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}:offset={offset.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}{outStream}; ");
                 
