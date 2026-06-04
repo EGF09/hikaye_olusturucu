@@ -62,21 +62,21 @@ public class FreeApiService : ILLMService, IImageGenerationService
             // Bölüm başlıklarını ve etiketleri temizle: Örn: **Giriş:**, Giriş - , 1. Gelişme: vb.
             string cleanLine = Regex.Replace(
                 trimmed, 
-                @"^(?i)[\s\*\_\-\#]*([0-9]+[\.\-\s]*)?(giriş|gelişme|sonuç|paragraf|bölüm|sahne|adım|step|intro|body|conclusion|giris|gelisme|sonuc)\s*([0-9]+)?\s*(:\s*|--?\s*|\.\s*|\*\*\s*|\s*$)", 
+                @"^(?i)[\s*_#-]*([0-9]+[. \s-]*)?(giriş|gelişme|sonuç|paragraf|bölüm|sahne|adım|step|intro|body|conclusion|giris|gelisme|sonuc)\s*([0-9]+)?\s*(:\s*|--?\s*|\.\s*|\*\*\s*|\s*$)", 
                 ""
             );
 
             // Yalnızca sayısal listeleri temizle: Örn: 1., 2., 1- vb.
             cleanLine = Regex.Replace(
                 cleanLine, 
-                @"^(?i)[\s\*\_\-\#]*[0-9]+[\.\-\s]*(:\s*|--?\s*|\.\s*|\s*$)", 
+                @"^(?i)[\s*_#-]*[0-9]+[. \s-]*(:\s*|--?\s*|\.\s*|\s*$)", 
                 ""
             );
 
             // Kenarlardaki artık markdown işaretlerini veya noktalama işaretlerini temizle
             // Sol taraftan nokta ve diğer semboller silinebilir, ancak sağ taraftan (cümle sonundan) nokta silinmemelidir.
-            cleanLine = Regex.Replace(cleanLine, @"^[\*_#\s\-:\.]+", "");
-            cleanLine = Regex.Replace(cleanLine, @"[\*_#\s\-:]+$", "");
+            cleanLine = Regex.Replace(cleanLine, @"^[*\s_#:\.-]+", "");
+            cleanLine = Regex.Replace(cleanLine, @"[*\s_#:-]+$", "");
 
             if (!string.IsNullOrWhiteSpace(cleanLine))
             {
