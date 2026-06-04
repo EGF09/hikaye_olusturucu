@@ -12,13 +12,11 @@ Bu uygulama, kullanıcı tarafından verilen herhangi bir konuda yapay zeka yard
 * **Yapısal Düzen:** Hikayeler tam olarak **3 paragraf (Giriş - Gelişme - Sonuç)** halinde ve aralarında boş satırlar olacak şekilde Türkçe olarak yazılır.
 
 ### 🖼️ 2. Kesintisiz Görsel Üretimi (Cascade Image Fallback)
-API anahtarlarınız olmasa veya limitleriniz dolsa dahi uygulamanın hiçbir zaman görsel yerine "Hata/Boş Kutu" göstermemesi için **6 kademeli şelale sistemi** kurulmuştur:
-1. **Pollinations AI (Anahtarlı):** Hızlı ve yüksek çözünürlüklü öncelikli görsel üretimi.
-2. **Pollinations AI (Anahtarsız):** Kota aşımında kullanıcının yerel IP'si üzerinden keyless deneme.
-3. **Hugging Face API (Flux Schnell):** Yüksek kaliteli sinematik görseller.
-4. **LoremFlickr (Etiketli Stock):** AI servisleri çökerse, hikaye promptundan çıkarılan İngilizce kelimelerle konuya uygun gerçek görseller çeker.
-5. **Picsum Photos (Rastgele Doğa/Sanat):** Konuya uygun görsel bulunamazsa rastgele yüksek çözünürlüklü görsel indirir.
-6. **LoremFlickr (Rastgele):** Son güvence olarak tamamen rastgele bir görsel çeker.
+Hikaye içeriğiyle uyumsuz, alakasız stok fotoğraflar yüklemek yerine, yalnızca hikaye konusuna özel yapay zeka görselleri üreten **ardışık yapay zeka şelalesi** kurulmuştur:
+1. **Pollinations AI (Anahtarlı):** Hızlı ve yüksek çözünürlüklü öncelikli görsel üretimi (varsa API anahtarı ile).
+2. **Pollinations AI (Anahtarsız):** Bakiye bittiğinde veya anahtar girilmediğinde kullanıcının kendi internet IP'si üzerinden doğrudan keyless deneme.
+3. **Hugging Face API (Flux Schnell):** Hugging Face API anahtarı ile alternatif yüksek kaliteli sinematik görseller üretir.
+4. **Estetik Konsept Kartı Fallback:** Eğer tüm yapay zeka servislerinde geçici bir erişim/bağlantı sorunu yaşanırsa, alakasız stok fotoğraflar yüklemek yerine, uygulamanın premium karanlık temasına uygun, soyut vektörel grafikler içeren **estetik konsept görsel kartları** otomatik oluşturulur.
 
 ### 🔊 3. Seslendirme ve Altyazı
 * Google TTS ve sistem konuşma motorları kullanılarak hikaye otomatik olarak Türkçe seslendirilir.

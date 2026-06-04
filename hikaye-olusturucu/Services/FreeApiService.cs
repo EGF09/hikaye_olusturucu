@@ -350,80 +350,13 @@ public class FreeApiService : ILLMService, IImageGenerationService
                     }
                 }
 
-                // 4. LoremFlickr'ı dene (Ücretsiz ve Anahtarsız Tag Bazlı Doğa/Konu Görseli)
-                if (imageBytes == null || imageBytes.Length <= 1000)
-                {
-                    try
-                    {
-                        string tags = "nature";
-                        if (!string.IsNullOrWhiteSpace(currentPrompt))
-                        {
-                            var words = currentPrompt.Split(' ')
-                                .Select(w => new string(w.Where(char.IsLetterOrDigit).ToArray()).ToLower())
-                                .Where(w => w.Length > 3 && w != "with" && w != "that" && w != "this" && w != "from" && w != "cute" && w != "high" && w != "detail" && w != "scene")
-                                .Take(3)
-                                .ToList();
-                            if (words.Count > 0)
-                            {
-                                tags = string.Join(",", words);
-                            }
-                        }
-                        string flickrUrl = $"https://loremflickr.com/1024/1024/{Uri.EscapeDataString(tags)}";
-                        using (var cleanClient = new HttpClient())
-                        {
-                            cleanClient.Timeout = TimeSpan.FromSeconds(20);
-                            imageBytes = await cleanClient.GetByteArrayAsync(flickrUrl);
-                        }
-                    }
-                    catch
-                    {
-                        imageBytes = null;
-                    }
-                }
-
-                // 5. Picsum Photos'u dene (Ücretsiz ve Anahtarsız Rastgele Doğa/Sanat Görseli)
-                if (imageBytes == null || imageBytes.Length <= 1000)
-                {
-                    try
-                    {
-                        string picsumUrl = "https://picsum.photos/1024/1024";
-                        using (var cleanClient = new HttpClient())
-                        {
-                            cleanClient.Timeout = TimeSpan.FromSeconds(20);
-                            imageBytes = await cleanClient.GetByteArrayAsync(picsumUrl);
-                        }
-                    }
-                    catch
-                    {
-                        imageBytes = null;
-                    }
-                }
-
-                // 6. LoremFlickr Random (Ücretsiz ve Anahtarsız Tamamen Rastgele Görsel)
-                if (imageBytes == null || imageBytes.Length <= 1000)
-                {
-                    try
-                    {
-                        string flickrRandomUrl = "https://loremflickr.com/1024/1024";
-                        using (var cleanClient = new HttpClient())
-                        {
-                            cleanClient.Timeout = TimeSpan.FromSeconds(20);
-                            imageBytes = await cleanClient.GetByteArrayAsync(flickrRandomUrl);
-                        }
-                    }
-                    catch
-                    {
-                        imageBytes = null;
-                    }
-                }
-
+                // 4. Rate limit koruması: Sadece AI servisleri başarıyla çalıştığında kısa bir bekleme (3sn) ekleyelim
                 if (imageBytes != null && imageBytes.Length > 1000)
                 {
                     string filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"image_{Guid.NewGuid()}.png");
                     await File.WriteAllBytesAsync(filePath, imageBytes);
                     imagePaths.Add(filePath);
 
-                    // Rate limit koruması: Sadece AI servisleri başarıyla çalıştığında kısa bir bekleme (3sn) ekleyelim
                     if (isAiGenerated && i < count - 1)
                     {
                         await Task.Delay(3000);
@@ -436,7 +369,7 @@ public class FreeApiService : ILLMService, IImageGenerationService
             }
         }
 
-        // 3. Fallback: Tüm servisler (AI ve stock) başarısız olduysa boş yer tutucu (placeholder) oluştur.
+        // 3. Fallback: Tüm AI servisleri başarısız olduysa estetik, tema uyumlu bir konsept yer tutucu kartı oluştur.
         while (imagePaths.Count < count)
         {
             int i = imagePaths.Count;
@@ -446,13 +379,53 @@ public class FreeApiService : ILLMService, IImageGenerationService
             {
                 using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
                 {
-                    graphics.Clear(System.Drawing.Color.FromArgb(49, 50, 68)); 
-                    using (var font = new System.Drawing.Font("Segoe UI", 48, System.Drawing.FontStyle.Bold))
-                    using (var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(205, 214, 244)))
+                    graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    
+                    // 1. Premium Arka Plan Gradiyenti (Karanlık Lale/Gece Mavisi Tonları)
+                    using (var gradBrush = new System.Drawing.Drawing2D.LinearGradientBrush(
+                        new System.Drawing.Rectangle(0, 0, 1024, 1024),
+                        System.Drawing.Color.FromArgb(17, 17, 27),     // Çok koyu lacivert
+                        System.Drawing.Color.FromArgb(49, 50, 68),     // Koyu gri/lila
+                        45f))
                     {
-                        string text = $"Görsel Üretilemedi\n(API Hatası/Yoğunluğu)\nSahne {i + 1}";
-                        var format = new System.Drawing.StringFormat { Alignment = System.Drawing.StringAlignment.Center, LineAlignment = System.Drawing.StringAlignment.Center };
-                        graphics.DrawString(text, font, brush, new System.Drawing.RectangleF(0, 0, 1024, 1024), format);
+                        graphics.FillRectangle(gradBrush, 0, 0, 1024, 1024);
+                    }
+
+                    // 2. Estetik Soyut Daireler (Arka plan süslemesi)
+                    using (var pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(20, 137, 180, 250), 3)) // Şeffaf Akant Mavisi
+                    {
+                        graphics.DrawEllipse(pen, 112, 112, 800, 800);
+                        graphics.DrawEllipse(pen, 212, 212, 600, 600);
+                        graphics.DrawEllipse(pen, 312, 312, 400, 400);
+                    }
+
+                    // 3. İç Çerçeve
+                    using (var borderPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(60, 203, 166, 247), 4)) // Şeffaf Lavanta
+                    {
+                        graphics.DrawRectangle(borderPen, 40, 40, 944, 944);
+                    }
+
+                    // 4. Şık Tipografi
+                    using (var titleFont = new System.Drawing.Font("Segoe UI", 42, System.Drawing.FontStyle.Bold))
+                    using (var subFont = new System.Drawing.Font("Segoe UI", 24, System.Drawing.FontStyle.Regular))
+                    using (var textBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(205, 214, 244))) // Açık Gri/Beyaz
+                    using (var accentBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(203, 166, 247))) // Lavanta
+                    {
+                        var format = new System.Drawing.StringFormat 
+                        { 
+                            Alignment = System.Drawing.StringAlignment.Center, 
+                            LineAlignment = System.Drawing.StringAlignment.Center 
+                        };
+
+                        // Üst etiket
+                        graphics.DrawString("YAPAY ZEKA GÖRSEL SERVİSİ", subFont, accentBrush, new System.Drawing.RectangleF(0, 330, 1024, 80), format);
+                        
+                        // Ana Başlık
+                        graphics.DrawString("Görsel Yüklenemedi", titleFont, textBrush, new System.Drawing.RectangleF(0, 410, 1024, 120), format);
+                        
+                        // Alt açıklama
+                        string subText = $"Sahne {i + 1}\n(Bağlantı yoğunluğu nedeniyle tasarım hazırlanamadı)";
+                        graphics.DrawString(subText, subFont, textBrush, new System.Drawing.RectangleF(0, 530, 1024, 150), format);
                     }
                 }
                 bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
