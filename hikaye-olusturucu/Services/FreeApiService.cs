@@ -377,12 +377,23 @@ public class FreeApiService : ILLMService, IImageGenerationService
                 byte[] imageBytes = null;
                 bool isAiGenerated = false;
 
-                // 1. Pollinations AI (Anahtarlı - Flux)
-                bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
-                if (hasPollinationsKey)
+                // 1. Gemini Imagen 3 (Anahtarlı)
+                bool hasGeminiKey = !string.IsNullOrWhiteSpace(_geminiApiKey) && !_geminiApiKey.Contains("YOUR_GEMINI_API_KEY");
+                if (hasGeminiKey)
                 {
-                    imageBytes = await CallPollinationsWithRetry(currentPrompt, "flux", _pollinationsApiKey);
+                    imageBytes = await CallGeminiImageApi(currentPrompt);
                     if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
+                }
+
+                // 2. Pollinations AI (Anahtarlı - Flux)
+                if (imageBytes == null || imageBytes.Length <= 1000)
+                {
+                    bool hasPollinationsKey = !string.IsNullOrWhiteSpace(_pollinationsApiKey) && !_pollinationsApiKey.Contains("YOUR_POLLINATIONS_API_KEY");
+                    if (hasPollinationsKey)
+                    {
+                        imageBytes = await CallPollinationsWithRetry(currentPrompt, "flux", _pollinationsApiKey);
+                        if (imageBytes != null && imageBytes.Length > 1000) isAiGenerated = true;
+                    }
                 }
 
                 // 2. Pollinations AI (Anahtarsız - Flux)
@@ -600,6 +611,76 @@ public class FreeApiService : ILLMService, IImageGenerationService
         {
             return await response.Content.ReadAsByteArrayAsync();
         }
+        return null;
+    }
+
+    private async Task<byte[]> CallGeminiImageApi(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(_geminiApiKey) || _geminiApiKey.Contains("YOUR_GEMINI_API_KEY"))
+        {
+            return null;
+        }
+
+        int maxRetries = 2;
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={Uri.EscapeDataString(_geminiApiKey)}";
+
+                var requestBody = new
+                {
+                    instances = new[]
+                    {
+                        new { prompt = prompt }
+                    },
+                    parameters = new
+                    {
+                        sampleCount = 1,
+                        aspectRatio = "1:1",
+                        outputMimeType = "image/png"
+                    }
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                
+                using var response = await _httpClient.PostAsync(url, content);
+                if (response.IsSuccessStatusCode)
+                {
+                    string responseString = await response.Content.ReadAsStringAsync();
+                    using JsonDocument doc = JsonDocument.Parse(responseString);
+                    var root = doc.RootElement;
+                    
+                    if (root.TryGetProperty("predictions", out JsonElement predictions) && predictions.GetArrayLength() > 0)
+                    {
+                        var prediction = predictions[0];
+                        if (prediction.TryGetProperty("bytesBase64Encoded", out JsonElement base64El))
+                        {
+                            string base64Str = base64El.GetString();
+                            if (!string.IsNullOrEmpty(base64Str))
+                            {
+                                return Convert.FromBase64String(base64Str);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    string err = await response.Content.ReadAsStringAsync();
+                    System.Diagnostics.Debug.WriteLine($"Gemini Image API Error (Attempt {attempt}): {response.StatusCode} - {err}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Gemini Image API Exception (Attempt {attempt}): {ex.Message}");
+            }
+
+            if (attempt < maxRetries)
+            {
+                await Task.Delay(4000);
+            }
+        }
+
         return null;
     }
 }
